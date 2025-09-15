@@ -1,4 +1,15 @@
-# PHOENIX
+# Currently Improving PHOENIX (notes and original README.md below)
+* Reviewing and making PHOENIX to be more versatile for different environments.
+* Refactoring file handling instead of manual input 
+
+
+
+
+
+
+
+ # Begin Original
+ # PHOENIX
 PHOENIX is a tool to infer **biologically explainable** differential equations describing genome-wide regulatory dynamics
 
 **Background:**  Models that are formulated as ordinary differential equations (ODEs) can accurately explain temporal gene expression patterns and promise to yield new insights into important cellular processes, disease progression, and intervention design. Learning such ODEs is challenging, since we want to predict the evolution of gene expression in a way that accurately encodes the causal gene-regulatory network (GRN) governing the dynamics and the nonlinear functional relationships between genes. Most widely used ODE estimation methods either impose too many parametric restrictions or are not guided by meaningful biological insights, both of which impedes scalability and/or explainability.
