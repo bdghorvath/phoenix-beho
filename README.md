@@ -3,6 +3,16 @@
 * Refactoring file handling instead of manual input 
 
 
+# Main Improvements:
+
+* Including all dataset code in Github for easy reproducibility
+
+
+### TODO:
+* find all mentioned files that's used hard coded input files
+* comment on code that needs to be refactored (ie. deleted/improved)
+
+
 
 
 

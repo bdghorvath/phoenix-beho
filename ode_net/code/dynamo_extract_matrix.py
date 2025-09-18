@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
+#TODO what is dynamo?
 import dynamo as dyn
 
 try:
@@ -21,7 +22,8 @@ except ImportError:
 from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
-from visualization_compete import *
+#TODO what is visualization_compete? assuming it's some file
+# from visualization_compete import *
 from helper_true_velo import *
 
 def get_true_val_set_r2(predictions, target, img_save_dir, N_list):

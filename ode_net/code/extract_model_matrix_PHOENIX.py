@@ -21,10 +21,13 @@ except ImportError:
 from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
-from visualization_inte import *
+#TODO what is this visualization_inte -- not a module/package found in PyPI
+#closest thing possible is some Berkeley automation github (https://github.com/BerkeleyAutomation/visualization)
+# from visualization_inte import *
 import matplotlib.pyplot as plt
 
-#torch.set_num_threads(4) #CHANGE THIS!
+# CHANGE THIS!
+#torch.set_num_threads(4) #TODO author left the comment above but don't know what 'change' should be made.
 
 def make_mask(X):
     triu = np.triu(X)
@@ -37,7 +40,7 @@ def make_mask(X):
     X[main_mask] = 0
 
 
-
+#TODO fix the hard code here
 sums_model = torch.load('/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model_sums.pt')
 prods_model = torch.load('/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model_prods.pt')
 alpha_comb = torch.load('/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model_alpha_comb.pt')

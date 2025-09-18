@@ -1,0 +1,13 @@
+| Tag             | Meaning / When to Use                                                              |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `# TODO:`       | Something needs to be done later                                                   |
+| `# FIXME:`      | There is a **known bug** or broken behavior that must be fixed                     |
+| `# HACK:`       | A workaround or ugly code that **works for now**, but needs a proper solution      |
+| `# NOTE:`       | Something non-obvious or subtle; add context for future maintainers                |
+| `# XXX:`        | A warning — this code is **fragile, dangerous, or sketchy**                        |
+| `# REVIEW:`     | Flag for reviewer attention — needs confirmation, better solution, or design check |
+| `# OPTIMIZE:`   | Code works but could be made **faster or more efficient**                          |
+| `# BUG:`        | Known bug that should be tracked/fixed                                             |
+| `# DEPRECATED:` | Code is outdated and should be removed or refactored                               |
+| `# REFACTOR:`   | Code should be restructured for readability, maintainability, or design            |
+| `# TEMP:`       | Temporary code that will be removed or replaced soon                               |

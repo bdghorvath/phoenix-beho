@@ -11,17 +11,18 @@ from time import perf_counter, process_time
 
 import torch
 import torch.optim as optim
+import matplotlib as plt
 
 try:
     from torchdiffeq.__init__ import odeint_adjoint as odeint
 except ImportError:
     from torchdiffeq import odeint_adjoint as odeint
 
-#from datagenerator import DataGenerator
+# from datagenerator import DataGenerator
 from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
-from visualization_inte import *
+# from visualization_inte import * --> "no module named visual_inte" - could be deleted, but going to keep in case
 
 #torch.set_num_threads(16) #CHANGE THIS!
 
@@ -250,12 +251,14 @@ if __name__ == "__main__":
                                         noise = settings['noise'],
                                         img_save_dir = img_save_dir,
                                         scale_expression = settings['scale_expression'],
+                                        #need to get rid of log_scale --> TypeError: DataHandler.fromcsv() got an unexpected keyword argument 'log_scale'
                                         log_scale = settings['log_scale'],
                                         init_bias_y = settings['init_bias_y'], fp_test = None) #,fp_test = args.test_data)
     
     abs_prior = True
     
     #Read in the prior matrix
+    #TODO -- Fix this file system for your own system :)
     prior_mat_loc = '/home/ubuntu/neural_ODE/mias_bcell_data/clean_data/edge_prior_matrix_mias_14691.csv'
     prior_mat = read_prior_matrix(prior_mat_loc, sparse = True, num_genes = data_handler.dim)
     
