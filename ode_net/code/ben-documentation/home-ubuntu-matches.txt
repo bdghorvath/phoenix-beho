@@ -1,0 +1,22 @@
+dynamo_extract_matrix.py:79:parser.add_argument('--data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+dynamo_extract_matrix.py:80:parser.add_argument('--velo_data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name_velo))
+dynamo_extract_matrix.py:143:    pretrained_model_file = '/home/ubuntu/phoenix/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+dynamo_extract_matrix.py:265:    loss_calcs = get_true_val_set_r2(pred_next_pts/my_scale_factor, X_test_target/my_scale_factor, "/home/ubuntu/phoenix/ode_net/code/model_inspect", N_list)
+dynamo_extract_matrix.py:267:    f = open('{}/R2_by_Ngene_dynamo_{}_{}.txt'.format("/home/ubuntu/phoenix/ode_net/code/model_inspect/", best_M, best_lambda), 'w')
+dynamo_extract_matrix.py:285:    #     visualizer.save("/home/ubuntu/phoenix/ode_net/code/model_inspect/dynamo_BRCA_11165.png")
+dynamo_extract_matrix.py:297:    #np.savetxt('/home/ubuntu/phoenix/ode_net/code/model_inspect/jac_burns.csv', all_jacs_l2_burn, delimiter=',')
+dynamo_extract_matrix.py:313:    np.savetxt("/home/ubuntu/phoenix/ode_net/code/model_inspect/effects_mat_dynamo.csv", jac_avg_unif, delimiter=",")
+rnaode_extract_matrix.py:115:parser.add_argument('--data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+rnaode_extract_matrix.py:116:parser.add_argument('--velo_data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name_velo))
+rnaode_extract_matrix.py:175:    pretrained_model_file = '/home/ubuntu/phoenix/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+rnaode_extract_matrix.py:263:    loss_calcs = get_true_val_set_r2(pred_next_pts, X_test_target, "/home/ubuntu/phoenix/ode_net/code/model_inspect", N_list)
+rnaode_extract_matrix.py:265:    f = open('{}/R2_by_Ngene_rnaode_{}.txt'.format("/home/ubuntu/phoenix/ode_net/code/model_inspect/", best_trees), 'w')
+rnaode_extract_matrix.py:279:        visualizer.save("/home/ubuntu/phoenix/ode_net/code/model_inspect/rnaode_BRCA_11165.png")
+rnaode_extract_matrix.py:283:    np.savetxt("/home/ubuntu/phoenix/ode_net/code/model_inspect/effects_mat_rnaode.csv", my_GRN, delimiter=",")
+scDVF_extract_matrix.py:80:parser.add_argument('--data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+scDVF_extract_matrix.py:81:parser.add_argument('--velo_data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name_velo))
+scDVF_extract_matrix.py:140:    pretrained_model_file = '/home/ubuntu/phoenix/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+scDVF_extract_matrix.py:270:        loss_calcs = get_true_val_set_r2(pred_next_pts, X_test_target, "/home/ubuntu/phoenix/ode_net/code/model_inspect", N_list)
+scDVF_extract_matrix.py:271:        f = open('{}/R2_by_Ngene_scdvf_{}.txt'.format("/home/ubuntu/phoenix/ode_net/code/model_inspect/", best_num_units), 'w')
+scDVF_extract_matrix.py:286:            visualizer.save("/home/ubuntu/phoenix/ode_net/code/model_inspect/scdvf_BRCA_11165.png".format(train_noise_level))
+scDVF_extract_matrix.py:357:        np.savetxt("/home/ubuntu/phoenix/ode_net/code/model_inspect/effects_mat_scdvf.csv", corr, delimiter=",")

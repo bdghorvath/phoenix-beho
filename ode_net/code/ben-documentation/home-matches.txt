@@ -1,0 +1,66 @@
+Verified that there is no other files aside from PHOENIX referenced here
+
+ie. home-matches.txt and home-ubuntu-matches.txt are the same
+will continue documenting soley on home-matches.txt for comments.
+
+
+Below is a list of hard-coded files that the OG(original) author published, 
+but didn't use flexible code if an investigator wanted to reproduce the same input format.
+
+
+* approx 65 matches found in the repo
+
+
+dynamo_extract_matrix.py:79:parser.add_argument('--data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+dynamo_extract_matrix.py:80:parser.add_argument('--velo_data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name_velo))
+dynamo_extract_matrix.py:143:    pretrained_model_file = '/home/ubuntu/phoenix/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+dynamo_extract_matrix.py:265:    loss_calcs = get_true_val_set_r2(pred_next_pts/my_scale_factor, X_test_target/my_scale_factor, "/home/ubuntu/phoenix/ode_net/code/model_inspect", N_list)
+dynamo_extract_matrix.py:267:    f = open('{}/R2_by_Ngene_dynamo_{}_{}.txt'.format("/home/ubuntu/phoenix/ode_net/code/model_inspect/", best_M, best_lambda), 'w')
+dynamo_extract_matrix.py:285:    #     visualizer.save("/home/ubuntu/phoenix/ode_net/code/model_inspect/dynamo_BRCA_11165.png")
+dynamo_extract_matrix.py:297:    #np.savetxt('/home/ubuntu/phoenix/ode_net/code/model_inspect/jac_burns.csv', all_jacs_l2_burn, delimiter=',')
+dynamo_extract_matrix.py:313:    np.savetxt("/home/ubuntu/phoenix/ode_net/code/model_inspect/effects_mat_dynamo.csv", jac_avg_unif, delimiter=",")
+extract_model_matrix_PHOENIX.py:44:sums_model = torch.load('/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model_sums.pt')
+extract_model_matrix_PHOENIX.py:45:prods_model = torch.load('/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model_prods.pt')
+extract_model_matrix_PHOENIX.py:46:alpha_comb = torch.load('/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model_alpha_comb.pt')
+extract_model_matrix_PHOENIX.py:47:gene_mult = torch.load('/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model_gene_multipliers.pt')
+extract_model_matrix_PHOENIX.py:63:np.savetxt("/home/ubuntu/neural_ODE/ode_net/code/model_inspect/effects_mat.csv", effects_mat, delimiter=",")
+find_gene_influences.py:38:parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+find_gene_influences.py:65:    pretrained_model_file = '/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+find_gene_influences.py:85:    np.savetxt('/home/ubuntu/neural_ODE/ode_net/code/model_inspect/inferred_influence_11165.csv', 
+prescient_test.py:39:        prescient_data_dict = prescient_read_data(data_path = "/home/ubuntu/neural_ODE/ground_truth_simulator/clean_data/prescient_input_350.csv",
+prescient_test.py:40:            meta_path = "/home/ubuntu/neural_ODE/ground_truth_simulator/clean_data/prescient_meta_350.csv",
+prescient_test.py:41:            out_dir = "/home/ubuntu/neural_ODE/ode_net/code/output/_prescient_data/prescient_350_",
+prescient_test.py:47:        prescient_true_velo_dict = prescient_read_data(data_path = "/home/ubuntu/neural_ODE/ground_truth_simulator/clean_data/prescient_true_vel_350.csv",
+prescient_test.py:48:            meta_path = "/home/ubuntu/neural_ODE/ground_truth_simulator/clean_data/prescient_meta_350.csv",
+prescient_test.py:49:            out_dir = "/home/ubuntu/neural_ODE/ode_net/code/output/_prescient_data/prescient_350_",
+prescient_test.py:55:        #python -m prescient train_model -i /home/ubuntu/neural_ODE/ode_net/code/output/_prescient_data/prescient_350_data.pt --weight_name "regular_noise0" --train_epochs 500 --save 500 --out_dir /home/ubuntu/neural_ODE/ode_net/code/output/_prescient_data/experiments/
+prescient_test.py:67:    model_path = "/home/ubuntu/neural_ODE/ode_net/code/output/_prescient_data/experiments/regular_noise{}-softplus_1_500-1e-06/seed_2".format(my_noise_to_test)
+prescient_test.py:83:        data_reload = torch.load("/home/ubuntu/neural_ODE/ode_net/code/output/_prescient_data/prescient_350_data.pt")
+prescient_test.py:84:        true_velos_load = torch.load("/home/ubuntu/neural_ODE/ode_net/code/output/_prescient_data/prescient_350_true_vel.pt")
+rnaode_extract_matrix.py:115:parser.add_argument('--data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+rnaode_extract_matrix.py:116:parser.add_argument('--velo_data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name_velo))
+rnaode_extract_matrix.py:175:    pretrained_model_file = '/home/ubuntu/phoenix/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+rnaode_extract_matrix.py:263:    loss_calcs = get_true_val_set_r2(pred_next_pts, X_test_target, "/home/ubuntu/phoenix/ode_net/code/model_inspect", N_list)
+rnaode_extract_matrix.py:265:    f = open('{}/R2_by_Ngene_rnaode_{}.txt'.format("/home/ubuntu/phoenix/ode_net/code/model_inspect/", best_trees), 'w')
+rnaode_extract_matrix.py:279:        visualizer.save("/home/ubuntu/phoenix/ode_net/code/model_inspect/rnaode_BRCA_11165.png")
+rnaode_extract_matrix.py:283:    np.savetxt("/home/ubuntu/phoenix/ode_net/code/model_inspect/effects_mat_rnaode.csv", my_GRN, delimiter=",")
+scDVF_extract_matrix.py:80:parser.add_argument('--data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+scDVF_extract_matrix.py:81:parser.add_argument('--velo_data', type=str, default='/home/ubuntu/phoenix/breast_cancer_data/clean_data/{}.csv'.format(clean_name_velo))
+scDVF_extract_matrix.py:140:    pretrained_model_file = '/home/ubuntu/phoenix/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+scDVF_extract_matrix.py:270:        loss_calcs = get_true_val_set_r2(pred_next_pts, X_test_target, "/home/ubuntu/phoenix/ode_net/code/model_inspect", N_list)
+scDVF_extract_matrix.py:271:        f = open('{}/R2_by_Ngene_scdvf_{}.txt'.format("/home/ubuntu/phoenix/ode_net/code/model_inspect/", best_num_units), 'w')
+scDVF_extract_matrix.py:286:            visualizer.save("/home/ubuntu/phoenix/ode_net/code/model_inspect/scdvf_BRCA_11165.png".format(train_noise_level))
+scDVF_extract_matrix.py:357:        np.savetxt("/home/ubuntu/phoenix/ode_net/code/model_inspect/effects_mat_scdvf.csv", corr, delimiter=",")
+train_BCell.py:199:parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/mias_bcell_data/clean_data/{}.csv'.format(clean_name))
+train_BCell.py:201:parser.add_argument('--test_data', type=str, default='/home/ubuntu/neural_ODE/mias_bcell_data/clean_data/{}.csv'.format(test_data_name))
+train_BCell.py:262:    prior_mat_loc = '/home/ubuntu/neural_ODE/mias_bcell_data/clean_data/edge_prior_matrix_mias_14691.csv'
+train_BCell.py:293:        pretrained_model_file = '/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+train_breast.py:199:parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+train_breast.py:201:parser.add_argument('--test_data', type=str, default='/home/ubuntu/neural_ODE/breast_cancer_data/clean_data/{}.csv'.format(test_data_name))
+train_breast.py:261:    prior_mat_loc = '/home/ubuntu/neural_ODE/breast_cancer_data/clean_data/edge_prior_matrix_desmedt_500.csv'
+train_breast.py:292:        pretrained_model_file = '/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+train_ootb.py:166:parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/ground_truth_simulator/clean_data/{}.csv'.format(clean_name))
+train_ootb.py:231:        pretrained_model_file = '/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+train_yeast.py:202:parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/pramila_yeast_data/clean_data/{}.csv'.format(clean_name))
+train_yeast.py:259:    prior_mat_loc = '/home/ubuntu/neural_ODE/pramila_yeast_data/clean_data/edge_prior_matrix_pramila_3551.csv'
+train_yeast.py:286:        pretrained_model_file = '/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model.pt'

@@ -1,3 +1,11 @@
+# Notes for Tom: 
+
+- Added documentation scripts to show where we need to refactor
+  - But still missing some of the paths for files that the author made
+- Need to learn the "tricks" about how to get the code running - even though we don't have any .pt files
+- Made a requirements.txt file (but still need to test if there are any dependency issues when running code)
+- Added a .gitignore 
+
 # Currently Improving PHOENIX (notes and original README.md below)
 * Reviewing and making PHOENIX to be more versatile for different environments.
 * Refactoring file handling instead of manual input 
