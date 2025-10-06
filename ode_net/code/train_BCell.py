@@ -22,7 +22,7 @@ except ImportError:
 from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
-# from visualization_inte import * --> "no module named visual_inte" - could be deleted, but going to keep in case
+# from visualization_inte import * #--> "no module named visual_inte" - #could be deleted, but going to keep in case
 
 #torch.set_num_threads(16) #CHANGE THIS!
 
@@ -107,7 +107,8 @@ def validation(odenet, data_handler, method, explicit_time):
     if method == "trajectory":
         False
 
-    init_bias_y = data_handler.init_bias_y
+    #refactor to run program commented out
+    # init_bias_y = data_handler.init_bias_y
     #odenet.eval()
     with torch.no_grad():
         predictions = []
@@ -138,12 +139,15 @@ def validation(odenet, data_handler, method, explicit_time):
 def true_loss(odenet, data_handler, method):
     return [0,0]
     data, t, target = data_handler.get_true_mu_set() #tru_mu_prop = 1 (incorporate later)
-    init_bias_y = data_handler.init_bias_y
+    
+    # init_bias_y = data_handler.init_bias_y
     #odenet.eval()
     with torch.no_grad():
         predictions = torch.zeros(data.shape).to(data_handler.device)
         for index, (time, batch_point) in enumerate(zip(t, data)):
-            predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] + init_bias_y #IH comment
+            predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] 
+            #rewrite to comment
+            # + init_bias_y #IH comment
         
         # Calculate true mean loss
         loss =  [torch.mean(torch.abs((predictions - target)/target)),torch.mean((predictions - target) ** 2)] #regulated_loss(predictions, target, t)
@@ -168,12 +172,14 @@ def training_step(odenet, data_handler, opt, method, batch_size, explicit_time, 
     batch = batch[not_nan_idx]
     target = target[not_nan_idx]
     '''
-
-    init_bias_y = data_handler.init_bias_y
+    #refactor to comment out
+    # init_bias_y = data_handler.init_bias_y
     opt.zero_grad()
     predictions = torch.zeros(batch.shape).to(data_handler.device)
     for index, (time, batch_point) in enumerate(zip(t, batch)):
-        predictions[index, :, :] = odeint(odenet, batch_point, time, method= method  )[1] + init_bias_y #IH comment
+        predictions[index, :, :] = odeint(odenet, batch_point, time, method= method  )[1] 
+        # #refactor to comment out
+        # + init_bias_y #IH comment
     
     loss_data = torch.mean((predictions - target)**2) 
     
@@ -194,11 +200,13 @@ def save_model(odenet, folder, filename):
     odenet.save('{}{}.pt'.format(folder, filename))
 
 parser = argparse.ArgumentParser('Testing')
-parser.add_argument('--settings', type=str, default='config_BCell.cfg')
-clean_name =  "mias_control_14691genes_2samples_6T" 
-parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/mias_bcell_data/clean_data/{}.csv'.format(clean_name))
-test_data_name = "mias_control_14691genes_2samples_6T" 
-parser.add_argument('--test_data', type=str, default='/home/ubuntu/neural_ODE/mias_bcell_data/clean_data/{}.csv'.format(test_data_name))
+#refactor for your own settings
+parser.add_argument('--settings', type=str, default='ode_net/code/config_BCell.cfg')
+clean_name =  "edge_prior_matrix_desmedt_11165" 
+
+parser.add_argument('--data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+test_data_name = "edge_prior_matrix_desmedt_11165" 
+parser.add_argument('--test_data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(test_data_name))
 
 args = parser.parse_args()
 
@@ -245,25 +253,35 @@ if __name__ == "__main__":
         print("Running on CPU")
         device = 'cpu'
     
+    print("test here"  "settings =", settings, type(settings))
+    print("end of settings \n\n\n\n\n\n")
     data_handler = DataHandler.fromcsv(args.data, device, settings['val_split'], normalize=settings['normalize_data'], 
                                         batch_type=settings['batch_type'], batch_time=settings['batch_time'], 
                                         batch_time_frac=settings['batch_time_frac'],
                                         noise = settings['noise'],
                                         img_save_dir = img_save_dir,
                                         scale_expression = settings['scale_expression'],
-                                        #need to get rid of log_scale --> TypeError: DataHandler.fromcsv() got an unexpected keyword argument 'log_scale'
-                                        log_scale = settings['log_scale'],
-                                        init_bias_y = settings['init_bias_y'], fp_test = None) #,fp_test = args.test_data)
+                                        # refactor - this was used in the OG code
+                                        # need to get rid of log_scale --> TypeError: DataHandler.fromcsv() got an unexpected keyword argument 'log_scale'
+                                        # log_scale = settings['log_scale'],
+                                        # init_bias_y = settings['init_bias_y'],
+                                        # fp_test = None
+                                        ) 
     
+    #commented out fp_test = args.test_data
+                                        
+
     abs_prior = True
     
     #Read in the prior matrix
     #TODO -- Fix this file system for your own system :)
-    prior_mat_loc = '/home/ubuntu/neural_ODE/mias_bcell_data/clean_data/edge_prior_matrix_mias_14691.csv'
+    prior_mat_loc = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/edge_prior_matrix_desmedt_11165.csv'
     prior_mat = read_prior_matrix(prior_mat_loc, sparse = True, num_genes = data_handler.dim)
     
-    if abs_prior:
-        prior_mat = torch.abs(prior_mat)
+# breast_cancer_data/clean_data/edge_prior_matrix_desmedt_11165.csv
+
+    # if abs_prior:
+    #     prior_mat = torch.abs(prior_mat)
 
     K = 10000
     batch_for_prior = (torch.rand(K,1,prior_mat.shape[0], device = data_handler.device)- 0.5)*1
@@ -281,9 +299,10 @@ if __name__ == "__main__":
     
     
     
-    # Initialization
+    
     odenet = ODENet(device, data_handler.dim, explicit_time=settings['explicit_time'], neurons = settings['neurons_per_layer'], 
-                    log_scale = settings['log_scale'], init_bias_y = settings['init_bias_y'])
+                    # log_scale = settings['log_scale'], init_bias_y = settings['init_bias_y'])
+    )
     odenet.float()
     param_count = sum(p.numel() for p in odenet.parameters() if p.requires_grad)
     param_ratio = round(param_count/ (data_handler.dim)**2, 3)
@@ -338,12 +357,16 @@ if __name__ == "__main__":
 
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', 
     factor=0.9, patience=6, threshold=1e-07, 
-    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-09, verbose=True)
+    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-09, 
+    #refactor
+    # verbose=True
+    )
 
     
     # Init plot
-    if settings['viz']:
-        visualizer = Visualizator1D(data_handler, odenet, settings, my_range_tuple = (0, 20))
+    #refactor - this was used in the OG code
+    # if settings['viz']:
+    #     visualizer = Visualizator1D(data_handler, odenet, settings, my_range_tuple = (0, 20))
 
     # Training loop
     #batch_times = [] 
@@ -364,11 +387,12 @@ if __name__ == "__main__":
     else:
         iterations_in_epoch = ceil(data_handler.train_data_length / settings['batch_size'])
 
-    if settings['viz']:
-        with torch.no_grad():
-            visualizer.visualize()
-            visualizer.plot()
-            visualizer.save(img_save_dir, 0)
+    #refactor - this was used in the OG code
+    # if settings['viz']:
+    #     with torch.no_grad():
+    #         visualizer.visualize()
+    #         visualizer.plot()
+    #         visualizer.save(img_save_dir, 0)
     start_time = perf_counter()
     #quit()
     
@@ -457,10 +481,11 @@ if __name__ == "__main__":
         if settings['verbose']:
             pbar.close()
 
-        if settings['solve_A']:
-            A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
-            A_list.append(A)
-            print('A =\n{}'.format(A))
+        #refactor - this was used in the OG code
+        # if settings['solve_A']:
+        #     A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
+        #     A_list.append(A)
+        #     print('A =\n{}'.format(A))
 
         #handle true-mu loss
        
@@ -497,11 +522,12 @@ if __name__ == "__main__":
             
         if (settings['viz'] and epoch in viz_epochs) or (settings['viz'] and epoch in rep_epochs) or (consec_epochs_failed == epochs_to_fail_to_terminate):
             print("Saving plot")
-            with torch.no_grad():
-                #print("nope..")
-                visualizer.visualize()
-                visualizer.plot()
-                visualizer.save(img_save_dir, epoch)
+            #refactor - this was used in the OG code
+            # with torch.no_grad():
+            #     #print("nope..")
+            #     visualizer.visualize()
+            #     visualizer.plot()
+            #     visualizer.save(img_save_dir, epoch)
         
         #print("Saving intermediate model")
         #save_model(odenet, intermediate_models_dir, 'model_at_epoch{}'.format(epoch))
@@ -548,8 +574,9 @@ if __name__ == "__main__":
             print("Saving MSE plot...")
             plot_MSE(epoch, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses, img_save_dir)    
             
-            if settings['lr_range_test']:
-                plot_LR_range_test(all_lrs_used, training_loss, img_save_dir)
+            #refactor - this was used in the OG code
+            # if settings['lr_range_test']:
+            #     plot_LR_range_test(all_lrs_used, training_loss, img_save_dir)
 
             print("Saving losses..")
             if data_handler.n_val > 0:
