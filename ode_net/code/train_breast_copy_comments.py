@@ -1,6 +1,5 @@
 #deleting unnecessary comments and documenting everything
 
-
 import sys
 import os
 import argparse
@@ -26,6 +25,49 @@ from odenet import ODENet
 from read_config import read_arguments_from_file
 # from solve_eq import solve_eq
 from visualization import *
+
+
+'''
+Potentially bad practice but comment out the code all underneath (make sure you don't adjust any code)
+
+make a seperate script exclusively to ensure that all of the paths are correct and ensure that everything is up
+to standard
+
+'''
+
+# Repo root relative to script
+from pathlib import Path
+import os
+
+# === Repo root ===
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # from code/ inside ode_net/
+os.chdir(REPO_ROOT)  # optional: ensures all relative paths start from repo root
+
+# === Directories ===
+CODE_DIR = REPO_ROOT / 'ode_net'                              # ode_net folder containing config & code
+DATA_DIR = REPO_ROOT / 'breast_cancer_data' / 'clean_data'    # CSV data folder
+OUTPUT_DIR = REPO_ROOT / 'output'                             # where outputs will go
+
+# === Files ===
+settings_file = CODE_DIR / 'code' / 'config_breast.cfg'
+train_data_file = DATA_DIR / 'desmedt_500genes_1sample_178T.csv'
+test_data_file = DATA_DIR / 'desmedt_500genes_1TESTsample_8middleT.csv'
+
+# === Print absolute paths to verify ===
+print("=== Absolute paths check ===")
+print("Repo root:      ", REPO_ROOT.resolve())
+print("Code dir:       ", CODE_DIR.resolve())
+print("Data dir:       ", DATA_DIR.resolve())
+print("Output dir:     ", OUTPUT_DIR.resolve())
+print("Settings file:  ", settings_file.resolve())
+print("Train data file:", train_data_file.resolve())
+print("Test data file: ", test_data_file.resolve())
+
+# === Optional: check if files exist ===
+for file in [settings_file, train_data_file, test_data_file]:
+    print(f"{file.name}: {'✅ Exists' if file.exists() else '❌ MISSING'}")
+
+
 
 
 
@@ -66,8 +108,6 @@ Squaring ensures that:
     
 Also:
 MSE tells you magnitude of error.
-
-R² tells you proportion of variance explained (how well predictions correlate with targets).
 '''
 def plot_MSE(epoch_so_far, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses, img_save_dir):
     
@@ -97,8 +137,12 @@ def plot_MSE(epoch_so_far, training_loss, validation_loss, true_mean_losses, tru
     #plt.subplots_adjust(wspace=0.3)
     fig.tight_layout()
     plt.savefig("{}/MSE_loss.png".format(img_save_dir))
-    np.savetxt('{}full_loss_info.csv'.format(output_root_dir), np.c_[training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based], delimiter=',')
+    #REPROD
+    # np.savetxt('{}full_loss_info.csv'.format(output_root_dir), np.c_[training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based], delimiter=',')
+    np.savetxt(output_root_dir / 'full_loss_info.csv', ...)
 
+
+#Computes the coefficient of determination (R²) between prediction and target. closer to 1 the better fit (exp vs actual)
 def my_r_squared(output, target):
     x = output
     y = target
@@ -107,14 +151,35 @@ def my_r_squared(output, target):
     my_corr = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)))
     return(my_corr**2)
 
+'''
+Runs the ODE network on a validation set (pairwise).
+pairwise - learns how the system works over time. the training data will be taken in at diff timepoints (start, end)
+The model must learn how to go from one state to the next according to the underlying ODE.
+| Name        | Meaning                            | Example                 |
+| ----------- | ---------------------------------- | ----------------------- |
+| `data_pw`   | The *initial state* (x at time t₀) | expression values at t₀ |
+| `t_pw`      | The *time interval* between points | Δt = t₁ - t₀            |
+| `target_pw` | The *target state* (x at time t₁)  | expression values at t₁ |
+
+
+ie. compares the ground truth 
+'''
+
+#why -- "batch_type" is not accessed
 def get_true_val_set_r2(odenet, data_handler, method, batch_type):
     data_pw, t_pw, target_pw = data_handler.get_true_mu_set_pairwise(val_only = True, batch_type =  "single")
     with torch.no_grad():
         predictions_pw = torch.zeros(data_pw.shape).to(data_handler.device)
+        #TOM - clarify predictions_pw and the for loop
+        #enum = give an index to each step
+        #zip lets you iterate over two sequences simultaneously (t_pw and data_pw).
+        #enumerate gives you the position in the output tensor where the prediction should be stored.
         for index, (time, batch_point) in enumerate(zip(t_pw, data_pw)):
             predictions_pw[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] 
         var_explained_pw = my_r_squared(predictions_pw, target_pw)
         true_val_mse = torch.mean((predictions_pw - target_pw)**2)
+
+    #TOM - why did author comment this out    
         
     #data, t, target = data_handler.get_true_mu_set_init_val_based(val_only = True) 
         #predictions = torch.zeros(target.shape).to(data_handler.device)
@@ -125,10 +190,18 @@ def get_true_val_set_r2(odenet, data_handler, method, batch_type):
     return [var_explained_pw, true_val_mse]
 
 
+'''
+for read_prior_matrix:
 
+Loads a prior knowledge matrix (e.g., gene-gene interaction network).
+If sparse=True: builds a sparse COO tensor.
+Otherwise: loads a dense matrix and converts to torch.FloatTensor.
+
+'''
 
 def read_prior_matrix(prior_mat_file_loc, sparse = False, num_genes = 11165):
     if sparse == False: 
+        #np.genfromtxt() = "read text data into an array, with smart handling of missing or mixed data."
         mat = np.genfromtxt(prior_mat_file_loc,delimiter=',')
         mat_torch = torch.from_numpy(mat)
         return mat_torch.float()
@@ -232,14 +305,25 @@ def _build_save_file_name(save_path, epochs):
         str(datetime.now().day), str(datetime.now().hour), str(datetime.now().minute), save_path, epochs)
 
 def save_model(odenet, folder, filename):
-    odenet.save('{}{}.pt'.format(folder, filename))
+    #REPROD
+    # odenet.save('{}{}.pt'.format(folder, filename))
+    odenet.save(str(folder / f"{filename}.pt"))
 
 parser = argparse.ArgumentParser('Testing')
-parser.add_argument('--settings', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/ode_net/code/config_breast.cfg')
+parser.add_argument('--settings', type=str, default=CODE_DIR / 'code' / 'config_breast.cfg')
+parser.add_argument('--data', type=str, default=DATA_DIR / 'desmedt_500genes_1sample_178T.csv')
+parser.add_argument('--test_data', type=str, default=DATA_DIR / 'desmedt_500genes_1TESTsample_8middleT.csv')
+
 clean_name =  "desmedt_500genes_1sample_178T" 
+
+
+'''
+REPROD - got rid of all of this
+parser.add_argument('--settings', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/ode_net/code/config_breast.cfg')
 parser.add_argument('--data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
 test_data_name = "desmedt_500genes_1TESTsample_8middleT" 
 parser.add_argument('--test_data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(test_data_name))
+'''
 
 args = parser.parse_args()
 
@@ -257,11 +341,20 @@ if __name__ == "__main__":
     if settings['debug']:
         print("********************IN DEBUG MODE!********************")
         save_file_name= '(DEBUG)' + save_file_name
-    output_root_dir = '{}/{}/'.format(settings['output_dir'], save_file_name)
+    #REPROD - fixed
+    # output_root_dir = '{}/{}/'.format(settings['output_dir'], save_file_name)
+    output_root_dir = OUTPUT_DIR / save_file_name
 
-    img_save_dir = '{}img/'.format(output_root_dir)
-    interm_models_save_dir = '{}interm_models/'.format(output_root_dir)
-    #intermediate_models_dir = '{}intermediate_models/'.format(output_root_dir)
+    # img_save_dir = '{}img/'.format(output_root_dir)
+    img_save_dir = output_root_dir / 'img'
+    # interm_models_save_dir = '{}interm_models/'.format(output_root_dir)
+    interm_models_save_dir = output_root_dir / 'interm_models'
+
+    #TOM review - pls ensure that this is working code lol
+    output_root_dir.mkdir(parents=True, exist_ok=True)
+    img_save_dir.mkdir(exist_ok=True)
+    interm_models_save_dir.mkdir(exist_ok=True)
+
 
     # Create image and model save directory
     if not os.path.exists(output_root_dir):
@@ -272,7 +365,9 @@ if __name__ == "__main__":
         os.mkdir(interm_models_save_dir)
 
     # Save the settings for future reference
-    with open('{}/settings.csv'.format(output_root_dir), 'w') as f:
+    #REPROD
+    # with open('{}/settings.csv'.format(output_root_dir), 'w') as f:
+    with open(output_root_dir / 'settings.csv', 'w') as f:
         f.write("Setting,Value\n")
         for key in settings.keys():
             f.write("{},{}\n".format(key,settings[key]))
@@ -301,7 +396,10 @@ if __name__ == "__main__":
     abs_prior = True
     
     #Read in the prior matrix
-    prior_mat_loc = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/edge_prior_matrix_desmedt_500.csv'
+    #REPROD
+    # prior_mat_loc = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/edge_prior_matrix_desmedt_500.csv'
+    prior_mat_loc = DATA_DIR / 'edge_prior_matrix_desmedt_500.csv'
+
     prior_mat = read_prior_matrix(prior_mat_loc, sparse = False, num_genes = data_handler.dim)
     
     if abs_prior:
@@ -334,7 +432,9 @@ if __name__ == "__main__":
     print("Using a NN with {} neurons per layer, with {} trainable parameters, i.e. parametrization ratio = {}".format(settings['neurons_per_layer'], param_count, param_ratio))
     
     if settings['pretrained_model']:
-        pretrained_model_file = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+        #REPROD
+        # pretrained_model_file = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+        pretrained_model_file = OUTPUT_DIR / '_pretrained_best_model' / 'best_val_model.pt'
         odenet.load(pretrained_model_file)
         #print("Loaded in pre-trained model!")
         
