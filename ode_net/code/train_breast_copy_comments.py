@@ -23,8 +23,9 @@ except ImportError:
 from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
-# from solve_eq import solve_eq
 from visualization import *
+#FOLLOWUP need to comment back in if we find out what solve_eq relates to
+# from solve_eq import solve_eq
 
 
 '''
@@ -67,10 +68,15 @@ print("Test data file: ", test_data_file.resolve())
 for file in [settings_file, train_data_file, test_data_file]:
     print(f"{file.name}: {'✅ Exists' if file.exists() else '❌ MISSING'}")
 
+#putting all file-related lines closer for easier debugging
+parser = argparse.ArgumentParser('Testing')
+parser.add_argument('--settings', type=str, default=CODE_DIR / 'code' / 'config_breast.cfg')
+parser.add_argument('--data', type=str, default=DATA_DIR / 'desmedt_500genes_1sample_178T.csv')
+parser.add_argument('--test_data', type=str, default=DATA_DIR / 'desmedt_500genes_1TESTsample_8middleT.csv')
 
+clean_name =  "desmedt_500genes_1sample_178T" 
 
-
-
+args = parser.parse_args()
 '''
 This network is being used with torchdiffeq.odeint
 
@@ -95,6 +101,10 @@ def soft_sign_mod(this_x):
     shifted_input =(this_x- shift) #500*
     abs_shifted_input = torch.abs(shifted_input)
     return(shifted_input/(1+abs_shifted_input))   
+
+#beginning probing here
+# x = torch.linspace(-2, 2, 10)
+# print("Softsign output:", soft_sign_mod(x))
 
 
 '''
@@ -309,12 +319,7 @@ def save_model(odenet, folder, filename):
     # odenet.save('{}{}.pt'.format(folder, filename))
     odenet.save(str(folder / f"{filename}.pt"))
 
-parser = argparse.ArgumentParser('Testing')
-parser.add_argument('--settings', type=str, default=CODE_DIR / 'code' / 'config_breast.cfg')
-parser.add_argument('--data', type=str, default=DATA_DIR / 'desmedt_500genes_1sample_178T.csv')
-parser.add_argument('--test_data', type=str, default=DATA_DIR / 'desmedt_500genes_1TESTsample_8middleT.csv')
 
-clean_name =  "desmedt_500genes_1sample_178T" 
 
 
 '''
@@ -325,7 +330,7 @@ test_data_name = "desmedt_500genes_1TESTsample_8middleT"
 parser.add_argument('--test_data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(test_data_name))
 '''
 
-args = parser.parse_args()
+
 
 # Main function
 if __name__ == "__main__":
@@ -602,10 +607,11 @@ if __name__ == "__main__":
         if settings['verbose']:
             pbar.close()
 
-        if settings['solve_A']:
-            A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
-            A_list.append(A)
-            print('A =\n{}'.format(A))
+        #FOLLOWUP need to comment back in if we find out what solve_eq relates to
+        # if settings['solve_A']:
+        #     A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
+        #     A_list.append(A)
+        #     print('A =\n{}'.format(A))
 
         #handle true-mu loss
        
@@ -693,8 +699,9 @@ if __name__ == "__main__":
             print("Saving MSE plot...")
             plot_MSE(epoch, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses, img_save_dir)    
             
-            if settings['lr_range_test']:
-                plot_LR_range_test(all_lrs_used, training_loss, img_save_dir)
+            #commented out- no functionality/reference
+            # if settings['lr_range_test']:
+            #     plot_LR_range_test(all_lrs_used, training_loss, img_save_dir)
 
             print("Saving losses..")
             if data_handler.n_val > 0:
