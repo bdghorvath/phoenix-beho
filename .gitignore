@@ -1,5 +1,8 @@
 #Used a GPT to create a robust Windows, Linux/Mac .gitignore for reproducibility
 
+#get rid of tracking some local edits
+ode_net/code/output/
+
 
 # ----------------------
 # Python
