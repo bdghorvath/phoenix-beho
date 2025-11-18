@@ -1,0 +1,107 @@
+#Used a GPT to create a robust Windows, Linux/Mac .gitignore for reproducibility
+
+
+# ----------------------
+# Python
+# ----------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+*.manifest
+*.spec
+
+# ----------------------
+# Virtual Environments
+# ----------------------
+venv/
+ENV/
+env/
+.env/
+.venv/
+.ENV/
+
+# ----------------------
+# Distribution / Packaging
+# ----------------------
+*.egg-info/
+.installed.cfg
+*.egg
+pip-wheel-metadata/
+wheels/
+*.whl
+
+# ----------------------
+# PyInstaller
+# ----------------------
+# Usually these are created when building executables
+*.manifest
+*.spec
+dist/
+build/
+
+# ----------------------
+# Unit test / coverage reports
+# ----------------------
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# ----------------------
+# Jupyter Notebook
+# ----------------------
+.ipynb_checkpoints
+
+# ----------------------
+# macOS
+# ----------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ----------------------
+# Windows
+# ----------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ----------------------
+# Linux
+# ----------------------
+*~
+.nfs*
+
+# ----------------------
+# IDEs and editors
+# ----------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ----------------------
+# Logs and temp files
+# ----------------------
+*.log
+*.tmp
+*.bak
+*.swp
+*.png
+*.txt*
