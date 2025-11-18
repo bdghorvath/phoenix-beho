@@ -119,3 +119,4 @@ IH-OG-code
 *.txt
 *.pyc*
 *__pycache__*
+.git-credentials
