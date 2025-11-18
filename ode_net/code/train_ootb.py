@@ -1,6 +1,7 @@
 # Imports
 import sys
 import os
+from pathlib import Path
 import argparse
 import inspect
 from datetime import datetime
@@ -21,10 +22,56 @@ except ImportError:
 from datahandler import DataHandler
 from odenet_ootb import ODENet
 from read_config import read_arguments_from_file
-from solve_eq import solve_eq
-from visualization_inte import *
+# from solve_eq import solve_eq
+from visualization import *
 
 #torch.set_num_threads(8) #CHANGE THIS!
+
+
+def save_model(odenet, folder, filename):
+    odenet.save('{}{}.pt'.format(folder, filename))
+
+# === Define Reproducible Paths ===
+try:
+    # Assumes this script is in REPO_ROOT/ode_net/code/
+    REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+except NameError:
+    # Fallback for interactive environments
+    REPO_ROOT = Path.cwd()
+    print("Warning: Could not determine script path. Using current working directory as REPO_ROOT.")
+    print(f"REPO_ROOT set to: {REPO_ROOT}")
+
+# Set the active directory to the repo root
+# This is crucial so that 'output_dir' in your config file is relative to the project root
+os.chdir(REPO_ROOT)
+print(f"Working directory set to: {REPO_ROOT}")
+
+# === Define Key Directories (based on train_1.py's paths) ===
+CODE_DIR = REPO_ROOT / 'ode_net' / 'code'
+DATA_DIR = REPO_ROOT / 'ground_truth_simulator' / 'clean_data'
+OUTPUT_DIR = CODE_DIR / 'output' # Used for the pretrained model
+
+# === Define Default Files ===
+# This variable must be defined before the parser
+clean_name = "G350genes_150samples"
+settings_file = CODE_DIR / 'config.cfg'
+train_data_file = DATA_DIR / f'{clean_name}.csv'
+prior_matrix_file = DATA_DIR / 'edge_prior_matrix_G350_noise_0.0.csv'
+pretrained_model_file = OUTPUT_DIR / '_pretrained_best_model' / 'best_val_model.pt'
+
+
+parser = argparse.ArgumentParser('Testing')
+parser.add_argument('--settings', type=str, default=settings_file,
+                    help="Path to the settings .cfg file")
+parser.add_argument('--data', type=str, default=train_data_file,
+                    help="Path to the training data .csv file")
+parser.add_argument('--prior_matrix', type=str, default=prior_matrix_file,
+                    help="Path to the prior matrix .csv file")
+parser.add_argument('--pretrained_model_file', type=str, default=pretrained_model_file,
+                    help="Path to the pretrained model .pt file (if 'pretrained_model' is True in settings)")
+
+args = parser.parse_args()
+
 
 def plot_LR_range_test(all_lrs_used, training_loss, img_save_dir):
     plt.figure()
@@ -80,7 +127,7 @@ def get_true_val_set_r2(odenet, data_handler, method):
 def validation(odenet, data_handler, method, explicit_time):
     data, t, target_full, n_val = data_handler.get_validation_set()
 
-    init_bias_y = data_handler.init_bias_y
+    # init_bias_y = data_handler.init_bias_y
     #odenet.eval()
     with torch.no_grad():
         predictions = []
@@ -110,17 +157,17 @@ def validation(odenet, data_handler, method, explicit_time):
     return [loss, n_val]
 
 def true_loss(odenet, data_handler, method):
-    return [0,0]
+    # return [0,0]
     data, t, target = data_handler.get_true_mu_set() #tru_mu_prop = 1 (incorporate later)
-    init_bias_y = data_handler.init_bias_y
+    # init_bias_y = data_handler.init_bias_y
     #odenet.eval()
     with torch.no_grad():
         predictions = torch.zeros(data.shape).to(data_handler.device)
         for index, (time, batch_point) in enumerate(zip(t, data)):
-            predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] + init_bias_y #IH comment
+            # predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] + init_bias_y #IH comment
         
         # Calculate true mean loss
-        loss =  [torch.mean(torch.abs((predictions - target)/target)),torch.mean((predictions - target) ** 2)] #regulated_loss(predictions, target, t)
+            loss =  [torch.mean(torch.abs((predictions - target)/target)),torch.mean((predictions - target) ** 2)] #regulated_loss(predictions, target, t)
     return loss
 
 
@@ -143,11 +190,12 @@ def training_step(odenet, data_handler, opt, method, batch_size, explicit_time, 
     target = target[not_nan_idx]
     '''
 
-    init_bias_y = data_handler.init_bias_y
+    # init_bias_y = data_handler.init_bias_y
     opt.zero_grad()
     predictions = torch.zeros(batch.shape).to(data_handler.device)
     for index, (time, batch_point) in enumerate(zip(t, batch)):
-        predictions[index, :, :] = odeint(odenet, batch_point, time, method= method  )[1] + init_bias_y #IH comment
+        #deleted  + init_bias_y 
+        predictions[index, :, :] = odeint(odenet, batch_point, time, method= method  )[1]
     loss_data = torch.mean((predictions - target)**2) 
     loss_data.backward() #MOST EXPENSIVE STEP!
     opt.step()
@@ -157,15 +205,7 @@ def _build_save_file_name(save_path, epochs):
     return '{}-{}-{}({};{})_{}_{}epochs'.format(str(datetime.now().year), str(datetime.now().month),
         str(datetime.now().day), str(datetime.now().hour), str(datetime.now().minute), save_path, epochs)
 
-def save_model(odenet, folder, filename):
-    odenet.save('{}{}.pt'.format(folder, filename))
 
-parser = argparse.ArgumentParser('Testing')
-parser.add_argument('--settings', type=str, default='config_inte.cfg')
-clean_name =  "chalmers_690genes_150samples_earlyT_0bimod_1initvar" #"
-parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/ground_truth_simulator/clean_data/{}.csv'.format(clean_name))
-
-args = parser.parse_args()
 
 # Main function
 if __name__ == "__main__":
@@ -216,21 +256,22 @@ if __name__ == "__main__":
                                         noise = settings['noise'],
                                         img_save_dir = img_save_dir,
                                         scale_expression = settings['scale_expression'],
-                                        log_scale = settings['log_scale'],
-                                        init_bias_y = settings['init_bias_y'])
+                                        # log_scale = settings['log_scale'],
+                                        # init_bias_y = settings['init_bias_y']
+                                        )
     
-    # Initialization
+    # Initialization - removed init_bias_y = settings['init_bias_y']
     odenet = ODENet(device, data_handler.dim, explicit_time=settings['explicit_time'], neurons = settings['neurons_per_layer'], 
-                    log_scale = settings['log_scale'], init_bias_y = settings['init_bias_y'])
+                    log_scale = settings['log_scale'])
     odenet.float()
     param_count = sum(p.numel() for p in odenet.parameters() if p.requires_grad)
     param_ratio = round(param_count/ (data_handler.dim)**2, 3)
     print("Using a NN with {} neurons per layer, with {} trainable parameters, i.e. parametrization ratio = {}".format(settings['neurons_per_layer'], param_count, param_ratio))
     
     if settings['pretrained_model']:
-        pretrained_model_file = '/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
-        odenet.load(pretrained_model_file)
-        #print("Loaded in pre-trained model!")
+        print(f"Loading pretrained model from: {args.pretrained_model_file}")
+        odenet.load(args.pretrained_model_file)
+        print("Loaded in pre-trained model!")
         
     with open('{}/network.txt'.format(output_root_dir), 'w') as net_file:
         net_file.write(odenet.__str__())
@@ -252,7 +293,8 @@ if __name__ == "__main__":
         
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', 
     factor=0.9, patience=3, threshold=1e-05, 
-    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-08, verbose=True)
+    #cispa- why was verbose = True here
+    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-08)
 
     
     # Init plot
@@ -334,10 +376,10 @@ if __name__ == "__main__":
         #Epoch done, now handle training loss
         train_loss = this_epoch_total_train_loss/iterations_in_epoch
         training_loss.append(train_loss)
-        #print("Overall training loss {:.5E}".format(train_loss))
+        print("Overall training loss {:.5E}".format(train_loss))
 
         mu_loss = get_true_val_set_r2(odenet, data_handler, settings['method'])
-        #mu_loss = true_loss(odenet, data_handler, settings['method'])
+        # mu_loss = true_loss(odenet, data_handler, settings['method'])
         true_mean_losses.append(mu_loss[1])
         true_mean_losses_init_val_based.append(mu_loss[0])
         all_lrs_used.append(opt.param_groups[0]['lr'])
@@ -355,10 +397,10 @@ if __name__ == "__main__":
         if settings['verbose']:
             pbar.close()
 
-        if settings['solve_A']:
-            A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
-            A_list.append(A)
-            print('A =\n{}'.format(A))
+        # if settings['solve_A']:
+        #     A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
+        #     A_list.append(A)
+        #     print('A =\n{}'.format(A))
 
         #handle true-mu loss
        
@@ -436,12 +478,12 @@ if __name__ == "__main__":
             rep_epochs_train_losses.append(min_train_loss)
             if data_handler.n_val > 0:
                 print("Best validation (MSE) so far = ", min_val_loss.item())
-                #print("True loss of best validation model (MSE) = ", true_loss_of_min_val_model.item())
+                print("True loss of best validation model (MSE) = ", true_loss_of_min_val_model.item())
                 rep_epochs_val_losses.append(min_val_loss.item())
                 #rep_epochs_mu_losses.append(0)
                 rep_epochs_mu_losses.append(true_loss_of_min_val_model.item())
             else:
-                #print("True loss of best training model (MSE) = ", true_loss_of_min_train_model.item())
+                print("True loss of best training model (MSE) = ", true_loss_of_min_train_model.item())
                 print("True loss of best training model (MSE) = ", 0)
             print("Saving MSE plot...")
             plot_MSE(epoch, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, img_save_dir)    

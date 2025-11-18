@@ -106,3 +106,16 @@ $RECYCLE.BIN/
 *.tmp
 *.bak
 *.swp
+
+*venv*
+torchdiffeq/
+*phoenix-odenet*
+*.pt
+*.png
+*.jpg
+*.csv
+IH-OG-code
+*.pyc
+*.txt
+*.pyc*
+*__pycache__*

@@ -274,13 +274,15 @@ if __name__ == "__main__":
     #np.savetxt('{}val_loss.csv'.format(output_root_dir), [loss_calcs], delimiter=',')
     print("DONE!")
 
-    visualizer = Visualizator1D_new(data_handler, odenet, best_vf_func, settings, my_range_tuple = (0, 1.2))
+    #FIXME uses arbitrary visualizer
+    # visualizer = Visualizator1D_new(data_handler, odenet, best_vf_func, settings, my_range_tuple = (0, 1.2))
     
-    
-    with torch.no_grad():
-        visualizer.visualize()
-        visualizer.plot()
-        visualizer.save("/home/ubuntu/phoenix/ode_net/code/model_inspect/dynamo_BRCA_11165.png")
+    #FIXME - found as above
+    # with torch.no_grad():
+    #     visualizer.visualize()
+    #     visualizer.plot()
+    #TODO - fix hardcoded file format
+    #     visualizer.save("/home/ubuntu/phoenix/ode_net/code/model_inspect/dynamo_BRCA_11165.png")
 
     print("obtaining Jacobian now..") #Jacobian analysis
 

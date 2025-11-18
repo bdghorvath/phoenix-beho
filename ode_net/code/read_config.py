@@ -4,7 +4,7 @@ import configparser
 
 def read_arguments_from_file(fp):
     """Reads run arguments from file"""
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
     config.read(fp)
 
     settings = config['settings']

@@ -5,6 +5,7 @@ import matplotlib as mpl
 
 def set_font_settings():
     mpl.rcParams.update(mpl.rcParamsDefault)
+    #TODO may have to look into this (potentially hard coded)
     font_dirs = ['/usr/share/fonts/' ]
     font_files = font_manager.findSystemFonts(fontpaths=font_dirs)
     font_list = font_manager.createFontList(font_files)
