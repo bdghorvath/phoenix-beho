@@ -1,0 +1,865 @@
+#deleting unnecessary comments and documenting everything
+
+import sys
+import os
+import argparse
+import inspect
+from datetime import datetime
+import numpy as np
+from tqdm import tqdm
+from math import ceil
+from time import perf_counter, process_time
+import matplotlib.pyplot as plt
+
+import torch
+import torch.optim as optim
+
+from torchdiffeq import odeint_adjoint as odeint
+#TOM - why did they use this try/except case - GPT just says they were trying to debug
+# try:
+#     from torchdiffeq.__init__ import odeint_adjoint as odeint
+# except ImportError:
+#     from torchdiffeq import odeint_adjoint as odeint
+
+#from datagenerator import DataGenerator
+from datahandler import DataHandler
+from odenet_pathlib import ODENet
+from read_config import read_arguments_from_file
+from visualization import *
+#FOLLOWUP need to comment back in if we find out what solve_eq relates to
+# from solve_eq import solve_eq
+
+
+'''
+Potentially bad practice but comment out the code all underneath (make sure you don't adjust any code)
+
+make a seperate script exclusively to ensure that all of the paths are correct and ensure that everything is up
+to standard
+
+'''
+
+# Repo root relative to script
+from pathlib import Path
+import os
+
+# === Repo root ===
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # from code/ inside ode_net/
+os.chdir(REPO_ROOT)  # optional: ensures all relative paths start from repo root
+
+# === Directories ===
+CODE_DIR = REPO_ROOT / 'ode_net'                              # ode_net folder containing config & code
+DATA_DIR = REPO_ROOT / 'breast_cancer_data' / 'clean_data'    # CSV data folder
+OUTPUT_DIR = REPO_ROOT / 'output'                             # where outputs will go
+
+# === Files ===
+settings_file = CODE_DIR / 'code' / 'config_breast.cfg'
+train_data_file = DATA_DIR / 'desmedt_500genes_1sample_178T.csv'
+test_data_file = DATA_DIR / 'desmedt_500genes_1TESTsample_8middleT.csv'
+
+# === Print absolute paths to verify ===
+print("=== Absolute paths check ===")
+print("Repo root:      ", REPO_ROOT.resolve())
+print("Code dir:       ", CODE_DIR.resolve())
+print("Data dir:       ", DATA_DIR.resolve())
+print("Output dir:     ", OUTPUT_DIR.resolve())
+print("Settings file:  ", settings_file.resolve())
+print("Train data file:", train_data_file.resolve())
+print("Test data file: ", test_data_file.resolve())
+
+# === Optional: check if files exist ===
+for file in [settings_file, train_data_file, test_data_file]:
+    print(f"{file.name}: {'✅ Exists' if file.exists() else '❌ MISSING'}")
+
+#putting all file-related lines closer for easier debugging
+#gemini
+# --- Helper function for boolean arguments ---
+def str_to_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('true', 't', 'yes', 'y', '1'):
+        return True
+    elif value.lower() in ('false', 'f', 'no', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+# --- Define all arguments ---
+parser = argparse.ArgumentParser('ODE-Net Training')
+
+# === File/Path Arguments ===
+parser.add_argument('--data', type=str, default=DATA_DIR / 'desmedt_500genes_1sample_178T.csv')
+parser.add_argument('--test_data', type=str, default=DATA_DIR / 'desmedt_500genes_1TESTsample_8middleT.csv')
+parser.add_argument('--output_dir', type=str, default=OUTPUT_DIR, help='Root directory for saving output.')
+parser.add_argument('--clean_name', type=str, default="desmedt_500genes_1sample_178T") 
+parser.add_argument('--debug', type=str_to_bool, default=False)
+
+# === Model & ODE Arguments ===
+parser.add_argument('--method', type=str, default='dopri5', help='ODE solver method (e.g., dopri5, rk4)')
+parser.add_argument('--neurons_per_layer', type=int, default=40)
+parser.add_argument('--explicit_time', type=str_to_bool, default=False)
+parser.add_argument('--log_scale', type=str, default='linear')
+parser.add_argument('--pretrained_model', type=str_to_bool, default=False)
+
+# === Training Arguments ===
+parser.add_argument('--optimizer', type=str, default='adam')
+parser.add_argument('--batch_size', type=int, default=17)
+parser.add_argument('--init_lr', type=float, default=5e-4)
+parser.add_argument('--weight_decay', type=float, default=0.0)
+parser.add_argument('--epochs', type=int, default=100)
+parser.add_argument('--dec_lr', type=str_to_bool, default=False, help='Decrease LR')
+parser.add_argument('--dec_lr_factor', type=float, default=0.995, help='Factor for LR decay')
+parser.add_argument('--relative_error', type=str_to_bool, default=False)
+
+# === Data Handling Arguments ===
+parser.add_argument('--batch_type', type=str, default='single')
+parser.add_argument('--batch_time', type=int, default=10)
+parser.add_argument('--batch_time_frac', type=float, default=0.5)
+parser.add_argument('--val_split', type=float, default=0.04)
+parser.add_argument('--normalize_data', type=str_to_bool, default=False)
+parser.add_argument('--scale_expression', type=float, default=1.0)
+parser.add_argument('--noise', type=float, default=0.0)
+
+# === Misc Arguments ===
+parser.add_argument('--viz', type=str_to_bool, default=True)
+parser.add_argument('--cpu', type=str_to_bool, default=True)
+parser.add_argument('--verbose', type=str_to_bool, default=True) # Added this, as it's used in your code
+parser.add_argument('--run_output_dir', type=str, default=None, help='Specific directory for this single run. Overrides time-based naming.')
+
+# --- Parse arguments and convert to dictionary ---
+args = parser.parse_args()
+settings = vars(args) # Convert the args Namespace to a dictionary
+
+# --- Set up clean_name (replaces the old hard-coded line) ---
+clean_name = settings['clean_name']
+'''
+This network is being used with torchdiffeq.odeint
+
+The network is modeling a continuous derivative of gene expression over time.
+
+ODE solvers (especially adaptive ones like odeint_adjoint) require smooth derivatives to converge and avoid instability.
+
+ReLU introduces kinks and zero-gradient regions, which can make numerical integration unstable or inaccurate.
+
+In contrast:
+
+Softsign gives a smooth slope everywhere, making the ODE solver more stable.
+
+Its bounded output keeps the network’s derivative from “blowing up” during integration.
+'''
+#using a softsign to have smooth gradients vs ReLU - when using ODEs it's good to have 
+#slower saturation vs tanh(x)
+#"If speed is critical, ReLU or Leaky ReLU may still outperform softsign variants." - GPT
+#tl;dr using ReLU would crash
+def soft_sign_mod(this_x):
+    shift = 0.5
+    shifted_input =(this_x- shift) #500*
+    abs_shifted_input = torch.abs(shifted_input)
+    return(shifted_input/(1+abs_shifted_input))   
+
+
+'''
+Recall MSE: mean squared error
+Measures the average squared difference between predicted and true values.
+
+Squaring ensures that:
+
+    1. Errors are always positive.
+    2. Larger errors are penalized more heavily than smaller ones.
+    
+Also:
+MSE tells you magnitude of error.
+'''
+def plot_MSE(epoch_so_far, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses, img_save_dir, output_root_dir):
+
+    
+    # Create two subplots, one for the main MSE loss plot and one for the prior loss plot.
+    # sharey=False → left and right plots do not share the y-axis scale, which is useful because prior loss might be on a different scale than main MSE.
+    fig, (ax1, ax2) = plt.subplots(1, 2, sharey=False)
+    fig.set_size_inches(12, 6)
+
+    ax1.plot(range(1, epoch_so_far + 1), training_loss, color="blue", label="Training loss")
+    ax1.plot(range(1, epoch_so_far + 1), true_mean_losses, color="green", label="Noiseless test loss")
+    
+    if len(validation_loss) > 0:
+        ax1.plot(range(1, epoch_so_far + 1), validation_loss, color="red", label="Validation loss")
+
+    ax2.plot(range(1, epoch_so_far + 1), prior_losses, color="magenta", label="Prior loss")
+
+    ax1.set_yscale('log')
+    ax1.set_xlabel("Epoch")
+    ax1.set_ylabel("Error (MSE)")
+    ax1.legend(loc='upper right')
+
+    ax2.set_yscale('log')
+    ax2.set_xlabel("Epoch")
+    ax2.set_ylabel("Error (MSE)")
+    ax2.set_title("Prior Loss")
+
+    #plt.subplots_adjust(wspace=0.3)
+    fig.tight_layout()
+    plt.savefig("{}/MSE_loss.png".format(img_save_dir))
+    #REPROD
+    # np.savetxt('{}full_loss_info.csv'.format(output_root_dir), np.c_[training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based], delimiter=',')
+    #initial gpt recommendation, but commenting out
+    # np.savetxt(output_root_dir / 'full_loss_info.csv', ...)
+    full_loss_array = np.column_stack([training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses])
+    print("Saving full loss info with shape:", full_loss_array.shape)
+    np.savetxt(output_root_dir / 'full_loss_info.csv', full_loss_array, delimiter=',')
+
+
+
+#Computes the coefficient of determination (R²) between prediction and target. closer to 1 the better fit (exp vs actual)
+def my_r_squared(output, target):
+    x = output
+    y = target
+    vx = x - torch.mean(x)
+    vy = y - torch.mean(y)
+    my_corr = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)))
+    return(my_corr**2)
+
+'''
+Runs the ODE network on a validation set (pairwise).
+pairwise - learns how the system works over time. the training data will be taken in at diff timepoints (start, end)
+The model must learn how to go from one state to the next according to the underlying ODE.
+| Name        | Meaning                            | Example                 |
+| ----------- | ---------------------------------- | ----------------------- |
+| `data_pw`   | The *initial state* (x at time t₀) | expression values at t₀ |
+| `t_pw`      | The *time interval* between points | Δt = t₁ - t₀            |
+| `target_pw` | The *target state* (x at time t₁)  | expression values at t₁ |
+
+
+ie. compares the ground truth 
+'''
+
+#why -- "batch_type" is not accessed
+def get_true_val_set_r2(odenet, data_handler, method, batch_type):
+    data_pw, t_pw, target_pw = data_handler.get_true_mu_set_pairwise(val_only = True, batch_type =  "single")
+    with torch.no_grad():
+        predictions_pw = torch.zeros(data_pw.shape).to(data_handler.device)
+        #TOM - clarify predictions_pw and the for loop
+        #enum = give an index to each step
+        #zip lets you iterate over two sequences simultaneously (t_pw and data_pw).
+        #enumerate gives you the position in the output tensor where the prediction should be stored.
+        for index, (time, batch_point) in enumerate(zip(t_pw, data_pw)):
+            predictions_pw[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] 
+        var_explained_pw = my_r_squared(predictions_pw, target_pw)
+        true_val_mse = torch.mean((predictions_pw - target_pw)**2)
+
+    #TOM - why did author comment this out    
+        
+    #data, t, target = data_handler.get_true_mu_set_init_val_based(val_only = True) 
+        #predictions = torch.zeros(target.shape).to(data_handler.device)
+        #for index, (time, batch_point) in enumerate(zip(t, data)):
+        #    predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1:] 
+        #var_explained_init_val_based = my_r_squared(predictions, target)
+    
+    return [var_explained_pw, true_val_mse]
+
+
+'''
+for read_prior_matrix:
+
+Loads a prior knowledge matrix (e.g., gene-gene interaction network).
+If sparse=True: builds a sparse COO tensor.
+Otherwise: loads a dense matrix and converts to torch.FloatTensor.
+
+'''
+
+def read_prior_matrix(prior_mat_file_loc, sparse = False, num_genes = 11165):
+    if sparse == False: 
+        #np.genfromtxt() = "read text data into an array, with smart handling of missing or mixed data."
+        mat = np.genfromtxt(prior_mat_file_loc,delimiter=',')
+        mat_torch = torch.from_numpy(mat)
+        return mat_torch.float()
+    else: #when scaling up >10000
+        mat = np.genfromtxt(prior_mat_file_loc,delimiter=',')
+        sparse_mat = torch.sparse_coo_tensor([mat[:,0].astype(int)-1, mat[:,1].astype(int)-1], mat[:,2], ( num_genes,  num_genes))
+        mat_torch = sparse_mat.to_dense().float()
+        return(mat_torch)
+
+
+
+def validation(odenet, data_handler, method, explicit_time):
+    data, t, target_full, n_val = data_handler.get_validation_set()
+    if method == "trajectory":
+        False
+
+    # init_bias_y = data_handler.init_bias_y
+    #odenet.eval()
+    with torch.no_grad():
+        predictions = []
+        targets = []
+        # For now we have to loop through manually, their implementation of odenet can only take fixed time lists.
+        for index, (time, batch_point, target_point) in enumerate(zip(t, data, target_full)):
+            #IH: 9/10/2021 - added these to handle unequal time availability 
+            #comment these out when not requiring nan-value checking
+            #not_nan_idx = [i for i in range(len(time)) if not torch.isnan(time[i])]
+            #time = time[not_nan_idx]
+            #not_nan_idx.pop()
+            #batch_point = batch_point[not_nan_idx]
+            #target_point = target_point[not_nan_idx]
+            
+            # Do prediction
+            predictions.append(odeint(odenet, batch_point, time, method=method)[1])
+            targets.append(target_point) #IH comment
+            #predictions[index, :, :] = odeint(odenet, batch_point[0], time, method=method)[1:]
+
+        # Calculate validation loss
+        predictions = torch.cat(predictions, dim = 0).to(data_handler.device) #IH addition
+        targets = torch.cat(targets, dim = 0).to(data_handler.device) 
+        #loss = torch.mean((predictions - targets) ** 2) #regulated_loss(predictions, target, t, val = True)
+        loss = torch.mean((predictions - targets)**2)
+        #print("gene_mult_mean =", torch.mean(torch.relu(odenet.gene_multipliers) + 0.1))        
+    return [loss, n_val]
+
+def true_loss(odenet, data_handler, method):
+    return [0,0]
+    data, t, target = data_handler.get_true_mu_set() #tru_mu_prop = 1 (incorporate later)
+    init_bias_y = data_handler.init_bias_y
+    #odenet.eval()
+    with torch.no_grad():
+        predictions = torch.zeros(data.shape).to(data_handler.device)
+        for index, (time, batch_point) in enumerate(zip(t, data)):
+            predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] + init_bias_y #IH comment
+        
+        # Calculate true mean loss
+        loss =  [torch.mean(torch.abs((predictions - target)/target)),torch.mean((predictions - target) ** 2)] #regulated_loss(predictions, target, t)
+    return loss
+
+
+def decrease_lr(opt, verbose, tot_epochs, epoch, lower_lr,  dec_lr_factor ):
+    dir_string = "Decreasing"
+    for param_group in opt.param_groups:
+        param_group['lr'] = param_group['lr'] * dec_lr_factor
+    if verbose:
+        print(dir_string,"learning rate to: %f" % opt.param_groups[0]['lr'])
+
+
+def training_step(odenet, data_handler, opt, method, batch_size, explicit_time, relative_error, batch_for_prior, prior_grad, loss_lambda):
+    #print("Using {} threads training_step".format(torch.get_num_threads()))
+    batch, t, target = data_handler.get_batch(batch_size)
+    
+    '''
+    not_nan_idx = [i for i in range(len(t)) if not torch.any(torch.isnan(t[i]))]
+    t = t[not_nan_idx]
+    batch = batch[not_nan_idx]
+    target = target[not_nan_idx]
+    '''
+    opt.zero_grad()
+    predictions = torch.zeros(batch.shape).to(data_handler.device)
+    for index, (time, batch_point) in enumerate(zip(t, batch)):
+        predictions[index, :, :] = odeint(odenet, batch_point, time, method= method  )[1] 
+        
+        # refactor - commented out author's code
+        # + init_bias_y #IH comment
+    
+    loss_data = torch.mean((predictions - target)**2) 
+    
+    pred_grad = odenet.prior_only_forward(t,batch_for_prior)
+    loss_prior = torch.mean((pred_grad - prior_grad)**2)
+    #loss_prior = loss_data
+
+    composed_loss = loss_lambda * loss_data + (1- loss_lambda) * loss_prior
+    composed_loss.backward() #MOST EXPENSIVE STEP!
+    opt.step()
+    return [loss_data, loss_prior]
+
+#gemini
+
+def _build_save_file_name(save_path, epochs):
+    return '{}-{}-{}({};{})_{}_{}epochs'.format(str(datetime.now().year), str(datetime.now().month),
+        str(datetime.now().day), str(datetime.now().hour), str(datetime.now().minute), save_path, epochs)
+
+def save_model(odenet, folder, filename):
+    #REPROD
+    # odenet.save('{}{}.pt'.format(folder, filename))
+    odenet.save(str(folder / f"{filename}.pt"))
+# (This new block REPLACES lines 347-379)
+
+print('Settings loaded from command-line arguments.')
+cleaned_file_name = settings['clean_name']
+
+# --- 1. Check for a specific run directory ---
+if settings['run_output_dir']:
+    # If a specific path is provided (from run_experiments.py), use it.
+    output_root_dir = Path(settings['run_output_dir'])
+    print(f"Using provided output directory: {output_root_dir}")
+else:
+    # ELSE: Fallback to the original time-based naming if script is run manually
+    print("No --run_output_dir provided, generating time-based directory...")
+    save_file_name = _build_save_file_name(cleaned_file_name, settings['epochs'])
+    if settings['debug']:
+        print("********************IN DEBUG MODE!********************")
+        save_file_name= '(DEBUG)' + save_file_name
+
+    # 'OUTPUT_DIR' is the global variable ('.../output')
+    output_root_dir = OUTPUT_DIR / save_file_name
+
+# --- 2. Define sub-directories ---
+img_save_dir = output_root_dir / 'img'
+interm_models_save_dir = output_root_dir / 'interm_models'
+
+# --- 3. Create all directories *immediately* ---
+# This is the key fix!
+print(f"Creating directories at: {output_root_dir}")
+output_root_dir.mkdir(parents=True, exist_ok=True)
+img_save_dir.mkdir(exist_ok=True)
+interm_models_save_dir.mkdir(exist_ok=True)
+
+# --- 4. Save the settings file ---
+# (This was the next step in your original code, and it's a good test)
+try:
+    with open(output_root_dir / 'settings.csv', 'w') as f:
+        f.write("Setting,Value\n")
+        for key in settings.keys():
+            f.write("{},{}\n".format(key,settings[key]))
+    print("Saved settings.csv successfully.")
+except Exception as e:
+    print(f"!!! CRITICAL ERROR: Could not write settings file: {e} !!!")
+    # This ensures we stop if permissions are wrong
+    raise e 
+
+# (The rest of your script, starting with the 'Use GPU if available' block, follows here)
+
+
+
+'''
+REPROD - got rid of all of this
+parser.add_argument('--settings', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/ode_net/code/config_breast.cfg')
+parser.add_argument('--data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
+test_data_name = "desmedt_500genes_1TESTsample_8middleT" 
+parser.add_argument('--test_data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(test_data_name))
+'''
+
+
+
+# Main function
+if __name__ == "__main__":
+    print('Setting recursion limit to 3000')
+    sys.setrecursionlimit(3000)
+    #gemini
+    print('Settings loaded from command-line arguments.')
+    cleaned_file_name = settings['clean_name']
+
+    #gemini - comment save_file_name out and input new settings format
+    # save_file_name = _build_save_file_name(cleaned_file_name, settings['epochs'])
+
+    # --- NEW: Check for a specific run directory ---
+    if settings['run_output_dir']:
+        # If a specific path is provided (from run_experiments.py), use it.
+        # We use Path() to make sure it's a proper path object.
+        output_root_dir = Path(settings['run_output_dir'])
+        print(f"Using provided output directory: {output_root_dir}")
+    else:
+        # ELSE: Fallback to the original time-based naming if script is run manually
+        print("No --run_output_dir provided, generating time-based directory...")
+        save_file_name = _build_save_file_name(cleaned_file_name, settings['epochs'])
+        if settings['debug']:
+            print("********************IN DEBUG MODE!********************")
+            save_file_name= '(DEBUG)' + save_file_name
+        
+        # 'OUTPUT_DIR' is the global variable ('.../output')
+        output_root_dir = OUTPUT_DIR / save_file_name
+    
+    # --- The rest of the script is the same ---
+    
+    # img_save_dir = '{}img/'.format(output_root_dir)
+    img_save_dir = output_root_dir / 'img'
+    # interm_models_save_dir = '{}interm_models/'.format(output_root_dir)
+    interm_models_save_dir = output_root_dir / 'interm_models'
+
+    #TOM review - pls ensure that this is working code lol
+    output_root_dir.mkdir(parents=True, exist_ok=True)
+    img_save_dir.mkdir(exist_ok=True)
+    interm_models_save_dir.mkdir(exist_ok=True)
+
+
+    # Create image and model save directory
+    if not os.path.exists(output_root_dir):
+        os.makedirs(output_root_dir, exist_ok=True)
+    if not os.path.exists(img_save_dir):
+        os.mkdir(img_save_dir)
+    if not os.path.exists(interm_models_save_dir):
+        os.mkdir(interm_models_save_dir)
+
+    # Save the settings for future reference
+    #REPROD
+    # with open('{}/settings.csv'.format(output_root_dir), 'w') as f:
+    with open(output_root_dir / 'settings.csv', 'w') as f:
+        f.write("Setting,Value\n")
+        for key in settings.keys():
+            f.write("{},{}\n".format(key,settings[key]))
+
+    # Use GPU if available
+    if not settings['cpu']:
+        os.environ["CUDA_VISIBLE_DEVICES"]="0"
+        print("Trying to run on GPU -- cuda available: " + str(torch.cuda.is_available()))
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print("Running on", device)
+    else:
+        print("Running on CPU")
+        device = 'cpu'
+    
+    data_handler = DataHandler.fromcsv(args.data, device, settings['val_split'], normalize=settings['normalize_data'], 
+                                        batch_type=settings['batch_type'], batch_time=settings['batch_time'], 
+                                        batch_time_frac=settings['batch_time_frac'],
+                                        noise = settings['noise'],
+                                        img_save_dir = img_save_dir,
+                                        scale_expression = settings['scale_expression'])
+                                        # log_scale = settings['log_scale'],
+                                        # init_bias_y = settings['init_bias_y'],
+                                        # fp_test = args.test_data)
+    
+    abs_prior = True
+    
+    #Read in the prior matrix
+    #REPROD
+    # prior_mat_loc = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/edge_prior_matrix_desmedt_500.csv'
+    prior_mat_loc = DATA_DIR / 'edge_prior_matrix_desmedt_500.csv'
+
+    prior_mat = read_prior_matrix(prior_mat_loc, sparse = False, num_genes = data_handler.dim)
+    
+    if abs_prior:
+        prior_mat = torch.abs(prior_mat)
+
+    K = 10000
+    batch_for_prior = (torch.rand(K,1,prior_mat.shape[0], device = data_handler.device)- 0.5)*1
+    prior_grad = torch.matmul(batch_for_prior,prior_mat) #can be any model here that predicts the derivative
+
+    del prior_mat
+
+    #curriculum learning
+    loss_lambda_at_start =  1
+    loss_lambda_at_middle = 1
+    loss_lambda_at_end = 1
+
+    curriculum_epochs_1 = 7
+    curriculum_epochs_2 = 20
+    
+    
+    
+    # Initialization
+    odenet = ODENet(device, data_handler.dim, explicit_time=settings['explicit_time'], neurons = settings['neurons_per_layer'], 
+                    # log_scale = settings['log_scale'], 
+                    # init_bias_y = settings['init_bias_y']
+                    )
+    odenet.float()
+    param_count = sum(p.numel() for p in odenet.parameters() if p.requires_grad)
+    param_ratio = round(param_count/ (data_handler.dim)**2, 3)
+    print("Using a NN with {} neurons per layer, with {} trainable parameters, i.e. parametrization ratio = {}".format(settings['neurons_per_layer'], param_count, param_ratio))
+    
+    if settings['pretrained_model']:
+        #REPROD
+        # pretrained_model_file = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
+        pretrained_model_file = OUTPUT_DIR / '_pretrained_best_model' / 'best_val_model.pt'
+        odenet.load(pretrained_model_file)
+        #print("Loaded in pre-trained model!")
+        
+    with open('{}/network.txt'.format(output_root_dir), 'w') as net_file:
+        net_file.write(odenet.__str__())
+        net_file.write('\n\n\n')
+        net_file.write(inspect.getsource(ODENet.forward))
+        net_file.write('\n')
+        if abs_prior:
+            net_file.write('prior_mat = torch.abs(prior_mat)')
+            net_file.write('\n')
+        net_file.write('lambda at start (first {} epochs) = {}'.format(curriculum_epochs_1, loss_lambda_at_start))
+        net_file.write('\n')
+        net_file.write('lambda in middle (upto {} epochs) = {}'.format(curriculum_epochs_2, loss_lambda_at_middle))
+        net_file.write('\n')
+        net_file.write('and then lambda = {}'.format(loss_lambda_at_end))
+        net_file.write('\n')
+        #net_file.write('SPECIAL SOFTSIGN-transformed inputs to prior!')
+        
+        
+
+    #quit()
+
+    # Select optimizer
+    #gemini added support for adamw
+    print('Using optimizer: {}'.format(settings['optimizer']))
+    
+    # Get parameters for different optimizer types
+    all_params = odenet.parameters()
+    adam_param_groups = [
+            {'params': odenet.net_sums.linear_out.weight}, 
+            {'params': odenet.net_sums.linear_out.bias},
+            {'params': odenet.net_prods.linear_out.weight},
+            {'params': odenet.net_prods.linear_out.bias},
+            {'params': odenet.net_alpha_combine.linear_out.weight},
+            {'params': odenet.gene_multipliers,'lr': 5*settings['init_lr']}
+        ]
+
+    if settings['optimizer'] == 'rmsprop':
+        opt = optim.RMSprop(all_params, lr=settings['init_lr'], weight_decay=settings['weight_decay'])
+    elif settings['optimizer'] == 'sgd':
+        opt = optim.SGD(all_params, lr=settings['init_lr'], weight_decay=settings['weight_decay'])
+    elif settings['optimizer'] == 'adagrad':
+        opt = optim.Adagrad(all_params, lr=settings['init_lr'], weight_decay=settings['weight_decay'])
+    elif settings['optimizer'] == 'adamw':
+        print("Using AdamW with complex param groups")
+        opt = optim.AdamW(adam_param_groups, lr=settings['init_lr'], weight_decay=settings['weight_decay'])
+    elif settings['optimizer'] == 'adam':
+        print("Using Adam with complex param groups")
+        opt = optim.Adam(adam_param_groups, lr=settings['init_lr'], weight_decay=settings['weight_decay'])
+    else:
+        print(f"Optimizer '{settings['optimizer']}' not recognized. Defaulting to Adam.")
+        opt = optim.Adam(adam_param_groups, lr=settings['init_lr'], weight_decay=settings['weight_decay'])
+
+
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', 
+    factor=0.9, patience=6, threshold=1e-07, 
+    #commented out verbose from author's code
+    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-09)
+
+    
+    # Init plot
+    if settings['viz']:
+        visualizer = Visualizator1D(data_handler, odenet, settings)
+
+    # Training loop
+    #batch_times = [] 
+    epoch_times = []
+    total_time = 0
+    validation_loss = []
+    training_loss = []
+    prior_losses = []
+    true_mean_losses = []
+    true_mean_losses_init_val_based = []
+    A_list = []
+
+    min_loss = 0
+    if settings['batch_type'] == 'single':
+        iterations_in_epoch = ceil(data_handler.train_data_length / settings['batch_size'])
+    elif settings['batch_type'] == 'trajectory':
+        iterations_in_epoch = data_handler.train_data_length
+    else:
+        iterations_in_epoch = ceil(data_handler.train_data_length / settings['batch_size'])
+
+    if settings['viz']:
+        with torch.no_grad():
+            visualizer.visualize()
+            visualizer.plot()
+            visualizer.save(img_save_dir, 0)
+    start_time = perf_counter()
+    #quit()
+    
+    tot_epochs = settings['epochs']
+    #viz_epochs = [round(tot_epochs*1/5), round(tot_epochs*2/5), round(tot_epochs*3/5), round(tot_epochs*4/5),tot_epochs]
+    rep_epochs = [1, 5, 7, 10, 15, 20, 30, 40, 50, 75, 90, 100, 120, 150, 180, 200, tot_epochs]
+    viz_epochs = rep_epochs
+    zeroth_drop_done = False
+    first_drop_done = False 
+    second_drop_done = False
+    rep_epochs_train_losses = []
+    rep_epochs_val_losses = []
+    rep_epochs_mu_losses = []
+    rep_epochs_time_so_far = []
+    rep_epochs_so_far = []
+    consec_epochs_failed = 0
+    epochs_to_fail_to_terminate = 40#15
+    all_lrs_used = []
+
+    #print(get_true_val_set_r2(odenet, data_handler, settings['method'], settings['batch_type']))
+    
+    for epoch in range(1, tot_epochs + 1):
+            
+        start_epoch_time = perf_counter()
+        iteration_counter = 1
+        data_handler.reset_epoch()
+        #visualizer.save(img_save_dir, epoch) #IH added to test
+        this_epoch_total_train_loss = 0
+        this_epoch_total_prior_loss = 0
+        print()
+        print("[Running epoch {}/{}]".format(epoch, settings['epochs']))
+
+        
+        if epoch < curriculum_epochs_1:
+            loss_lambda = loss_lambda_at_start 
+        elif epoch >= curriculum_epochs_1 and epoch < curriculum_epochs_2:
+            loss_lambda = loss_lambda_at_middle
+        else:
+            loss_lambda = loss_lambda_at_end    
+        print("current loss_lambda =", loss_lambda)
+        
+        
+        if settings['verbose']:
+            pbar = tqdm(total=iterations_in_epoch, desc="Training loss:")
+        while not data_handler.epoch_done:
+            start_batch_time = perf_counter()
+            
+            loss_list = training_step(odenet, data_handler, opt, settings['method'], settings['batch_size'], settings['explicit_time'], settings['relative_error'], batch_for_prior, prior_grad, loss_lambda)
+            loss = loss_list[0]
+            prior_loss = loss_list[1]
+            #batch_times.append(perf_counter() - start_batch_time)
+
+            this_epoch_total_train_loss += loss.item()
+            this_epoch_total_prior_loss += prior_loss.item()
+            # Print and update plots
+            iteration_counter += 1
+
+            if settings['verbose']:
+                pbar.update(1)
+                pbar.set_description("Training loss, Prior loss: {:.2E}, {:.2E}".format(loss.item(), prior_loss.item()))
+        
+        epoch_times.append(perf_counter() - start_epoch_time)
+
+        #Epoch done, now handle training loss
+        train_loss = this_epoch_total_train_loss/iterations_in_epoch
+        training_loss.append(train_loss)
+        prior_losses.append(this_epoch_total_prior_loss/iterations_in_epoch)
+        #print("Overall training loss {:.5E}".format(train_loss))
+
+        mu_loss = get_true_val_set_r2(odenet, data_handler, settings['method'], settings['batch_type'])
+        #mu_loss = true_loss(odenet, data_handler, settings['method'])
+        true_mean_losses.append(mu_loss[1])
+        true_mean_losses_init_val_based.append(mu_loss[0])
+        all_lrs_used.append(opt.param_groups[0]['lr'])
+        
+        if epoch == 1:
+                min_train_loss = train_loss
+        else:
+            if train_loss < min_train_loss:
+                min_train_loss = train_loss
+                true_loss_of_min_train_model =  mu_loss[1]
+                #save_model(odenet, output_root_dir, 'best_train_model')
+    
+
+        if settings['verbose']:
+            pbar.close()
+
+        #FOLLOWUP need to comment back in if we find out what solve_eq relates to
+        # if settings['solve_A']:
+        #     A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
+        #     A_list.append(A)
+        #     print('A =\n{}'.format(A))
+
+        #handle true-mu loss
+       
+        if data_handler.n_val > 0:
+            val_loss_list = validation(odenet, data_handler, settings['method'], settings['explicit_time'])
+            val_loss = val_loss_list[0]
+            validation_loss.append(val_loss)
+            if epoch == 1:
+                min_val_loss = val_loss
+                true_loss_of_min_val_model = mu_loss[1]
+                print('Model improved, saving current model')
+                best_vaL_model_so_far = odenet
+                save_model(odenet, output_root_dir, 'best_val_model')
+            else:
+                if val_loss < min_val_loss:
+                    consec_epochs_failed = 0
+                    min_val_loss = val_loss
+                    true_loss_of_min_val_model =  mu_loss[1]
+                    #saving true-mean loss of best val model
+                    print('Model improved, saving current model')
+                    save_model(odenet, output_root_dir, 'best_val_model')
+                else:
+                    consec_epochs_failed = consec_epochs_failed + 1
+
+                    
+            print("Validation loss {:.5E}, using {} points".format(val_loss, val_loss_list[1]))
+            scheduler.step(val_loss)
+
+        print("Overall training loss {:.5E}".format(train_loss))
+
+        print("True MSE of val traj (pairwise): {:.5E}".format(mu_loss[1]))
+        print("True R^2 of val traj (pairwise): {:.2%}".format(mu_loss[0]))
+
+            
+        if (settings['viz'] and epoch in viz_epochs) or (settings['viz'] and epoch in rep_epochs) or (consec_epochs_failed == epochs_to_fail_to_terminate):
+            print("Saving plot")
+            with torch.no_grad():
+                #print("nope..")
+                visualizer.visualize()
+                visualizer.plot()
+                visualizer.save(img_save_dir, epoch)
+        
+        #print("Saving intermediate model")
+        #save_model(odenet, intermediate_models_dir, 'model_at_epoch{}'.format(epoch))
+    
+        # Decrease learning rate if specified
+        if settings['dec_lr'] : #and epoch % settings['dec_lr'] == 0
+            decrease_lr(opt, True,tot_epochs= tot_epochs,
+             epoch = epoch, lower_lr = settings['init_lr'], dec_lr_factor = settings['dec_lr_factor'])
+        
+        '''
+        #Decrease learning rate as a one-time thing:
+        if (train_loss < 9*10**(-3) and zeroth_drop_done == False) or (epoch == 25 and zeroth_drop_done == False):
+            decrease_lr(opt, settings['verbose'], one_time_drop= 5*10**(-3))
+            zeroth_drop_done = True
+
+        if (train_loss < 9*10**(-4) and first_drop_done == False) or (epoch == 50 and first_drop_done == False):
+            decrease_lr(opt, settings['verbose'], one_time_drop= 1*10**(-3))
+            first_drop_done = True
+        
+        if (train_loss < 2*10**(-4) and second_drop_done == False)  or (epoch == 75 and second_drop_done == False):
+            decrease_lr(opt, settings['verbose'], one_time_drop= 1*10**(-4))
+            second_drop_done = True
+        '''
+            
+        #val_loss < (0.01 * settings['scale_expression'])**1
+        if (epoch in rep_epochs) or (consec_epochs_failed == epochs_to_fail_to_terminate):
+            print()
+            rep_epochs_so_far.append(epoch)
+            print("Epoch=", epoch)
+            rep_time_so_far = (perf_counter() - start_time)/3600
+            print("Time so far= ", rep_time_so_far, "hrs")
+            rep_epochs_time_so_far.append(rep_time_so_far)
+            print("Best training (MSE) so far= ", min_train_loss)
+            rep_epochs_train_losses.append(min_train_loss)
+            if data_handler.n_val > 0:
+                print("Best validation (MSE) so far = ", min_val_loss.item())
+                #print("True loss of best validation model (MSE) = ", true_loss_of_min_val_model.item())
+                rep_epochs_val_losses.append(min_val_loss.item())
+                #rep_epochs_mu_losses.append(0)
+                rep_epochs_mu_losses.append(true_loss_of_min_val_model.item())
+            else:
+                #print("True loss of best training model (MSE) = ", true_loss_of_min_train_model.item())
+                print("True loss of best training model (MSE) = ", 0)
+            print("Saving MSE plot...")
+            #REPROD
+            # plot_MSE(epoch, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses, img_save_dir)    
+            plot_MSE(epoch, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses, img_save_dir, output_root_dir)
+            
+            #commented out- no functionality/reference
+            # if settings['lr_range_test']:
+            #     plot_LR_range_test(all_lrs_used, training_loss, img_save_dir)
+
+            print("Saving losses..")
+            if data_handler.n_val > 0:
+                L = [rep_epochs_so_far, rep_epochs_time_so_far, rep_epochs_train_losses, rep_epochs_val_losses, rep_epochs_mu_losses]
+                np.savetxt('{}rep_epoch_losses.csv'.format(output_root_dir), np.transpose(L), delimiter=',')    
+            
+            print("Saving best intermediate val model..")
+            interm_model_file_name = 'trained_model_epoch_' + str(epoch)
+            save_model(odenet, interm_models_save_dir , interm_model_file_name)
+                
+            
+            #else:
+            #    L = [rep_epochs_so_far, rep_epochs_time_so_far, rep_epochs_train_losses, rep_epochs_mu_losses]
+            #    np.savetxt('{}rep_epoch_losses.csv'.format(output_root_dir), np.transpose(L), delimiter=',')    
+           
+        
+
+        if consec_epochs_failed==epochs_to_fail_to_terminate:
+            print("Went {} epochs without improvement; terminating.".format(epochs_to_fail_to_terminate))
+            # break
+
+        #if data_handler.n_val > 0 & val_loss < (0.01 * settings['scale_expression'])**1:
+        #    print("SUCCESS! Reached validation target; terminating.")
+        #    break    
+
+    total_time = perf_counter() - start_time
+
+    
+    save_model(odenet, output_root_dir, 'final_model')
+
+    print("Saving times")
+    np.savetxt('{}epoch_times.csv'.format(output_root_dir), epoch_times, delimiter=',')
+
+        
+    print("DONE!")
+
+  
+ 

@@ -1,6 +1,7 @@
 # Imports
 import sys
 import os
+from pathlib import Path
 import argparse
 import inspect
 from datetime import datetime
@@ -25,6 +26,50 @@ from visualization import *
 
 #torch.set_num_threads(16) #CHANGE THIS!
 
+def save_model(odenet, folder, filename):
+    odenet.save('{}{}.pt'.format(folder, filename))
+
+# === Define Reproducible Paths ===
+try:
+    # Assumes this script is in REPO_ROOT/ode_net/code/
+    REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+except NameError:
+    # Fallback for interactive environments
+    REPO_ROOT = Path.cwd()
+    print("Warning: Could not determine script path. Using current working directory as REPO_ROOT.")
+    print(f"REPO_ROOT set to: {REPO_ROOT}")
+
+# Set the active directory to the repo root
+# This is crucial so that 'output_dir' in your config file is relative to the project root
+os.chdir(REPO_ROOT)
+print(f"Working directory set to: {REPO_ROOT}")
+
+# === Define Key Directories (based on train_1.py's paths) ===
+CODE_DIR = REPO_ROOT / 'ode_net' / 'code'
+DATA_DIR = REPO_ROOT / 'ground_truth_simulator' / 'clean_data'
+OUTPUT_DIR = CODE_DIR / 'output' # Used for the pretrained model
+
+# === Define Default Files ===
+# This variable must be defined before the parser
+clean_name = "G350genes_150samples"
+settings_file = CODE_DIR / 'config.cfg'
+train_data_file = DATA_DIR / f'{clean_name}.csv'
+prior_matrix_file = DATA_DIR / 'edge_prior_matrix_G350_noise_0.0.csv'
+pretrained_model_file = OUTPUT_DIR / '_pretrained_best_model' / 'best_val_model.pt'
+
+
+parser = argparse.ArgumentParser('Testing')
+parser.add_argument('--settings', type=str, default=settings_file,
+                    help="Path to the settings .cfg file")
+parser.add_argument('--data', type=str, default=train_data_file,
+                    help="Path to the training data .csv file")
+parser.add_argument('--prior_matrix', type=str, default=prior_matrix_file,
+                    help="Path to the prior matrix .csv file")
+parser.add_argument('--pretrained_model_file', type=str, default=pretrained_model_file,
+                    help="Path to the pretrained model .pt file (if 'pretrained_model' is True in settings)")
+
+
+args = parser.parse_args()
 
 def plot_MSE(epoch_so_far, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses ,img_save_dir):
     plt.figure()
@@ -106,7 +151,7 @@ def validation(odenet, data_handler, method, explicit_time):
     return [loss, n_val]
 
 def true_loss(odenet, data_handler, method):
-    return [0,0]
+    # return [0,0] //
     data, t, target = data_handler.get_true_mu_set() #tru_mu_prop = 1 (incorporate later)
     
     #odenet.eval()
@@ -143,15 +188,7 @@ def _build_save_file_name(save_path, epochs):
     return '{}-{}-{}({};{})_{}_{}epochs'.format(str(datetime.now().year), str(datetime.now().month),
         str(datetime.now().day), str(datetime.now().hour), str(datetime.now().minute), save_path, epochs)
 
-def save_model(odenet, folder, filename):
-    odenet.save('{}{}.pt'.format(folder, filename))
 
-parser = argparse.ArgumentParser('Testing')
-parser.add_argument('--settings', type=str, default='config.cfg')
-clean_name =  "G350genes_150samples" 
-parser.add_argument('--data', type=str, default='C:/STUDIES/RESEARCH/phoenix/ground_truth_simulator/clean_data/{}.csv'.format(clean_name))
-
-args = parser.parse_args()
 
 # Main function
 if __name__ == "__main__":
@@ -204,8 +241,8 @@ if __name__ == "__main__":
                                         scale_expression = settings['scale_expression'])
     
     #Read in the prior matrix
-    prior_mat_loc = 'C:/STUDIES/RESEARCH/phoenix/ground_truth_simulator/clean_data/edge_prior_matrix_G350_noise_0.0.csv'
-    prior_mat = read_prior_matrix(prior_mat_loc, sparse = False, num_genes = data_handler.dim) #change to sparse = False for yeast data or simulated data
+    print(f"Loading prior matrix from: {args.prior_matrix}")
+    prior_mat = read_prior_matrix(args.prior_matrix, sparse = False, num_genes = data_handler.dim) #change to sparse = False for yeast data or simulated data
     batch_for_prior = (torch.rand(10000,1,prior_mat.shape[0], device = data_handler.device) - 0.5)
     prior_grad = torch.matmul(batch_for_prior,prior_mat) #can be any model here that predicts the derivative
     del prior_mat
@@ -218,8 +255,8 @@ if __name__ == "__main__":
     print("Using a NN with {} neurons per layer, with {} trainable parameters".format(settings['neurons_per_layer'], param_count))
     
     if settings['pretrained_model']:
-        pretrained_model_file = 'C:/STUDIES/RESEARCH/phoenix/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
-        odenet.load(pretrained_model_file)
+        print(f"Loading pretrained model from: {args.pretrained_model_file}")
+        odenet.load(args.pretrained_model_file)
         #print("Loaded in pre-trained model!")
         
     with open('{}/network.txt'.format(output_root_dir), 'w') as net_file:
@@ -255,7 +292,8 @@ if __name__ == "__main__":
 
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', 
     factor=0.9, patience=3, threshold=1e-09, 
-    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-09, verbose=True)
+    #removed verbose for debugging
+    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-09)
 
     
     # Init plot
@@ -343,7 +381,7 @@ if __name__ == "__main__":
         #print("Overall training loss {:.5E}".format(train_loss))
 
         mu_loss = get_true_val_set_r2(odenet, data_handler, settings['method'], settings['batch_type'])
-        #mu_loss = true_loss(odenet, data_handler, settings['method'])
+        mu_loss = true_loss(odenet, data_handler, settings['method'])
         true_mean_losses.append(mu_loss[1])
         true_mean_losses_init_val_based.append(mu_loss[0])
         all_lrs_used.append(opt.param_groups[0]['lr'])
@@ -412,9 +450,9 @@ if __name__ == "__main__":
             rep_epochs_train_losses.append(min_train_loss)
             if data_handler.n_val > 0:
                 print("Best validation (MSE) so far = ", min_val_loss.item())
-                #print("True loss of best validation model (MSE) = ", true_loss_of_min_val_model.item())
+                print("True loss of best validation model (MSE) = ", true_loss_of_min_val_model.item())
                 rep_epochs_val_losses.append(min_val_loss.item())
-                #rep_epochs_mu_losses.append(0)
+                rep_epochs_mu_losses.append(0)
                 rep_epochs_mu_losses.append(true_loss_of_min_val_model.item())
             else:
                 #print("True loss of best training model (MSE) = ", true_loss_of_min_train_model.item())

@@ -1,4 +1,3 @@
-# Imports
 import sys
 import os
 import argparse
@@ -21,9 +20,12 @@ except ImportError:
 from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
-from solve_eq import solve_eq
-from visualization_inte import *
 
+#FIXME what reference is this used for regarding solve_eq - missing files-- online didn't seem to have any viable packages on PyPI
+# from solve_eq import solve_eq
+# from visualization_inte import *
+
+#FIXME refactor the below - what are we changing this to
 #torch.set_num_threads(16) #CHANGE THIS!
 
 
@@ -36,8 +38,10 @@ clean_name =  "desmedt_11165genes_1sample_186T"
 parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
 
 args = parser.parse_args()
+# REFACTOR
 device = "cpu"
-# Main function
+
+
 if __name__ == "__main__":
     print('Setting recursion limit to 3000')
     sys.setrecursionlimit(3000)
@@ -57,6 +61,7 @@ if __name__ == "__main__":
     odenet = ODENet(device, data_handler.dim, explicit_time=settings['explicit_time'], neurons = settings['neurons_per_layer'], 
                     log_scale = settings['log_scale'], init_bias_y = settings['init_bias_y'])
     odenet.float()
+    #REFACTOR
     pretrained_model_file = '/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
     odenet.load(pretrained_model_file)
     print(odenet)

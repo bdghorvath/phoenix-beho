@@ -1,6 +1,7 @@
 # Imports
 import sys
 import os
+from pathlib import Path
 import argparse
 import inspect
 from datetime import datetime
@@ -21,9 +22,56 @@ except ImportError:
 from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
-from visualization_inte import *
+from visualization import *
 
 #torch.set_num_threads(16) #CHANGE THIS!
+
+
+
+def save_model(odenet, folder, filename):
+    odenet.save('{}{}.pt'.format(folder, filename))
+
+# === Define Reproducible Paths ===
+try:
+    # Assumes this script is in REPO_ROOT/ode_net/code/
+    REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+except NameError:
+    # Fallback for interactive environments
+    REPO_ROOT = Path.cwd()
+    print("Warning: Could not determine script path. Using current working directory as REPO_ROOT.")
+    print(f"REPO_ROOT set to: {REPO_ROOT}")
+
+# Set the active directory to the repo root
+# This is crucial so that 'output_dir' in your config file is relative to the project root
+os.chdir(REPO_ROOT)
+print(f"Working directory set to: {REPO_ROOT}")
+
+# === Define Key Directories (based on train_1.py's paths) ===
+CODE_DIR = REPO_ROOT / 'ode_net' / 'code'
+DATA_DIR = REPO_ROOT / 'ground_truth_simulator' / 'pramila_yeast_data' / 'clean_data'
+OUTPUT_DIR = CODE_DIR / 'output' # Used for the pretrained model
+
+# === Define Default Files ===
+# This variable must be defined before the parser
+clean_name = "pramila_3551genes_1sample_24T"
+settings_file = CODE_DIR / 'config_yeast.cfg'
+train_data_file = DATA_DIR / f'{clean_name}.csv'
+prior_matrix_file = DATA_DIR / 'edge_prior_matrix_pramila_3551.csv'
+pretrained_model_file = OUTPUT_DIR / '_pretrained_best_model' / 'best_val_model.pt'
+
+
+parser = argparse.ArgumentParser('Testing')
+parser.add_argument('--settings', type=str, default=settings_file,
+                    help="Path to the settings .cfg file")
+parser.add_argument('--data', type=str, default=train_data_file,
+                    help="Path to the training data .csv file")
+parser.add_argument('--prior_matrix', type=str, default=prior_matrix_file,
+                    help="Path to the prior matrix .csv file")
+parser.add_argument('--pretrained_model_file', type=str, default=pretrained_model_file,
+                    help="Path to the pretrained model .pt file (if 'pretrained_model' is True in settings)")
+
+args = parser.parse_args()
+
 
 def plot_LR_range_test(all_lrs_used, training_loss, img_save_dir):
     plt.figure()
@@ -110,7 +158,7 @@ def validation(odenet, data_handler, method, explicit_time):
     if method == "trajectory":
         False
 
-    init_bias_y = data_handler.init_bias_y
+    # init_bias_y = data_handler.init_bias_y
     #odenet.eval()
     with torch.no_grad():
         predictions = []
@@ -139,14 +187,15 @@ def validation(odenet, data_handler, method, explicit_time):
     return [loss, n_val]
 
 def true_loss(odenet, data_handler, method):
-    return [0,0]
+    # return [0,0]
     data, t, target = data_handler.get_true_mu_set() #tru_mu_prop = 1 (incorporate later)
-    init_bias_y = data_handler.init_bias_y
+    # init_bias_y = data_handler.init_bias_y
     #odenet.eval()
     with torch.no_grad():
         predictions = torch.zeros(data.shape).to(data_handler.device)
         for index, (time, batch_point) in enumerate(zip(t, data)):
-            predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] + init_bias_y #IH comment
+            #deleted + init_bias_y
+            predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] #IH comment
         
         # Calculate true mean loss
         loss =  [torch.mean(torch.abs((predictions - target)/target)),torch.mean((predictions - target) ** 2)] #regulated_loss(predictions, target, t)
@@ -162,7 +211,7 @@ def decrease_lr(opt, verbose, tot_epochs, epoch, lower_lr,  dec_lr_factor ):
 
 
 def training_step(odenet, data_handler, opt, method, batch_size, explicit_time, relative_error, batch_for_prior, prior_grad, loss_lambda):
-    #print("Using {} threads training_step".format(torch.get_num_threads()))
+    print("Using {} threads training_step".format(torch.get_num_threads()))
     batch, t, target = data_handler.get_batch(batch_size)
     
     '''
@@ -172,11 +221,12 @@ def training_step(odenet, data_handler, opt, method, batch_size, explicit_time, 
     target = target[not_nan_idx]
     '''
 
-    init_bias_y = data_handler.init_bias_y
+    # init_bias_y = data_handler.init_bias_y
     opt.zero_grad()
     predictions = torch.zeros(batch.shape).to(data_handler.device)
     for index, (time, batch_point) in enumerate(zip(t, batch)):
-        predictions[index, :, :] = odeint(odenet, batch_point, time, method= method  )[1] + init_bias_y #IH comment
+        #deleted + init_bias_y 
+        predictions[index, :, :] = odeint(odenet, batch_point, time, method= method  )[1] 
     
     loss_data = torch.mean((predictions - target)**2) 
     
@@ -189,6 +239,47 @@ def training_step(odenet, data_handler, opt, method, batch_size, explicit_time, 
     opt.step()
     return [loss_data, loss_prior]
 
+"""
+def training_step(odenet, data_handler, opt, method, batch_size, explicit_time, relative_error, batch_for_prior, prior_grad, loss_lambda):
+    #print("Using {} threads training_step".format(torch.get_num_threads()))
+    batch, t, target = data_handler.get_batch(batch_size)
+    
+    '''
+    not_nan_idx = [i for i in range(len(t)) if not torch.any(torch.isnan(t[i]))]
+    t = t[not_nan_idx]
+    batch = batch[not_nan_idx]
+    target = target[not_nan_idx]
+    '''
+
+    init_bias_y = data_handler.init_bias_y
+    opt.zero_grad()
+
+    # --- START FIX ---
+    # Build a list of predictions to preserve the gradient graph
+    prediction_list = []
+    for index, (time, batch_point) in enumerate(zip(t, batch)):
+        # odeint needs a 1D initial condition (y0)
+        y0 = batch_point[0] 
+        # This pred_trajectory tensor *will* have a grad_fn
+        pred_trajectory = odeint(odenet, y0, time, method= method  )[1] #deleted + init_bias_y 
+        prediction_list.append(pred_trajectory)
+
+    # Stack the list into a single tensor
+    predictions = torch.stack(prediction_list, dim=0)
+    # --- END FIX ---
+    
+    loss_data = torch.mean((predictions - target)**2) 
+    
+    pred_grad = odenet.prior_only_forward(t,batch_for_prior)
+    loss_prior = torch.mean((pred_grad - prior_grad)**2)
+    #loss_prior = loss_data
+
+    composed_loss = loss_lambda * loss_data + (1- loss_lambda) * loss_prior
+    composed_loss.backward() #MOST EXPENSIVE STEP!
+    opt.step()
+    return [loss_data, loss_prior]
+"""
+
 def _build_save_file_name(save_path, epochs):
     return '{}-{}-{}({};{})_{}_{}epochs'.format(str(datetime.now().year), str(datetime.now().month),
         str(datetime.now().day), str(datetime.now().hour), str(datetime.now().minute), save_path, epochs)
@@ -196,12 +287,6 @@ def _build_save_file_name(save_path, epochs):
 def save_model(odenet, folder, filename):
     odenet.save('{}{}.pt'.format(folder, filename))
 
-parser = argparse.ArgumentParser('Testing')
-parser.add_argument('--settings', type=str, default='config_yeast.cfg')
-clean_name =  "pramila_3551genes_1sample_24T" 
-parser.add_argument('--data', type=str, default='/home/ubuntu/neural_ODE/pramila_yeast_data/clean_data/{}.csv'.format(clean_name))
-
-args = parser.parse_args()
 
 # Main function
 if __name__ == "__main__":
@@ -251,13 +336,15 @@ if __name__ == "__main__":
                                         batch_time_frac=settings['batch_time_frac'],
                                         noise = settings['noise'],
                                         img_save_dir = img_save_dir,
-                                        scale_expression = settings['scale_expression'],
-                                        log_scale = settings['log_scale'],
-                                        init_bias_y = settings['init_bias_y'])
+                                        # scale_expression = settings['scale_expression'],
+                                        # log_scale = settings['log_scale'],
+                                        # init_bias_y = settings['init_bias_y']
+                                        )
     
     #Read in the prior matrix
-    prior_mat_loc = '/home/ubuntu/neural_ODE/pramila_yeast_data/clean_data/edge_prior_matrix_pramila_3551.csv'
-    prior_mat = read_prior_matrix(prior_mat_loc, sparse = False, num_genes = data_handler.dim)
+    #Read in the prior matrix
+    print(f"Loading prior matrix from: {args.prior_matrix}")
+    prior_mat = read_prior_matrix(args.prior_matrix, sparse = False, num_genes = data_handler.dim)
     #matrix_of_pm_1 = 2 * (torch.randint(low = 0, high=2, size =prior_mat.shape)-0.5)
     #prior_mat = prior_mat * matrix_of_pm_1
     prior_mat = torch.abs(prior_mat)
@@ -275,17 +362,17 @@ if __name__ == "__main__":
     loss_lambda = loss_lambda_at_start 
     
     # Initialization
-    odenet = ODENet(device, data_handler.dim, explicit_time=settings['explicit_time'], neurons = settings['neurons_per_layer'], 
-                    log_scale = settings['log_scale'], init_bias_y = settings['init_bias_y'])
+    #log_scale = settings['log_scale'], init_bias_y = settings['init_bias_y']
+    odenet = ODENet(device, data_handler.dim, explicit_time=settings['explicit_time'], neurons = settings['neurons_per_layer'])
     odenet.float()
     param_count = sum(p.numel() for p in odenet.parameters() if p.requires_grad)
     param_ratio = round(param_count/ (data_handler.dim)**2, 3)
     print("Using a NN with {} neurons per layer, with {} trainable parameters, i.e. parametrization ratio = {}".format(settings['neurons_per_layer'], param_count, param_ratio))
     
     if settings['pretrained_model']:
-        pretrained_model_file = '/home/ubuntu/neural_ODE/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
-        odenet.load(pretrained_model_file)
-        #print("Loaded in pre-trained model!")
+        print(f"Loading pretrained model from: {args.pretrained_model_file}")
+        odenet.load(args.pretrained_model_file)
+        print("Loaded in pre-trained model!")
         
     with open('{}/network.txt'.format(output_root_dir), 'w') as net_file:
         net_file.write(odenet.__str__())
@@ -323,12 +410,14 @@ if __name__ == "__main__":
 
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='min', 
     factor=0.9, patience=3, threshold=1e-06, 
-    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-09, verbose=True)
+    threshold_mode='abs', cooldown=0, min_lr=0, eps=1e-09)
 
     
     # Init plot
     if settings['viz']:
-        visualizer = Visualizator1D(data_handler, odenet, settings, my_range_tuple = (0, 150))
+        #original line for train_yeast
+        # visualizer = Visualizator1D(data_handler, odenet, settings, my_range_tuple = (0, 150))
+        visualizer = Visualizator1D(data_handler, odenet, settings)
 
     # Training loop
     #batch_times = [] 
@@ -436,10 +525,10 @@ if __name__ == "__main__":
         if settings['verbose']:
             pbar.close()
 
-        if settings['solve_A']:
-            A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
-            A_list.append(A)
-            print('A =\n{}'.format(A))
+        # if settings['solve_A']:
+        #     A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
+        #     A_list.append(A)
+        #     print('A =\n{}'.format(A))
 
         #handle true-mu loss
        

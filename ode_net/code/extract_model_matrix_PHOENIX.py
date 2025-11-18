@@ -23,7 +23,7 @@ from odenet import ODENet
 from read_config import read_arguments_from_file
 #TODO what is this visualization_inte -- not a module/package found in PyPI
 #closest thing possible is some Berkeley automation github (https://github.com/BerkeleyAutomation/visualization)
-# from visualization_inte import *
+from visualization import *
 import matplotlib.pyplot as plt
 
 # CHANGE THIS!

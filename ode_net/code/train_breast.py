@@ -1,6 +1,7 @@
 # Imports
 import sys
 import os
+from pathlib import Path  
 import argparse
 import inspect
 from datetime import datetime
@@ -23,9 +24,54 @@ from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
 # from solve_eq import solve_eq
-from visualization import *
+from visualization import * # <-- Kept your import
 
 #torch.set_num_threads(16) #CHANGE THIS!
+
+# === Added from template ===
+def save_model(odenet, folder, filename):
+    odenet.save('{}{}.pt'.format(folder, filename))
+
+# === Define Reproducible Paths ===
+# This logic assumes your script is located at: REPO_ROOT/ode_net/code/train_breast.py
+try:
+    REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+except NameError:
+    # Fallback for interactive environments (like Jupyter)
+    REPO_ROOT = Path.cwd()
+    print("Warning: Could not determine script path. Using current working directory as REPO_ROOT.")
+    print(f"REPO_ROOT set to: {REPO_ROOT}")
+
+# Set the active directory to the repo root
+# This ensures that relative paths in your .cfg file (like output_dir = output)
+# are created relative to the project root, not wherever you ran the script from.
+os.chdir(REPO_ROOT)
+
+# === Define Key Directories ===
+CODE_DIR = REPO_ROOT / 'ode_net'
+DATA_DIR = REPO_ROOT / 'breast_cancer_data' / 'clean_data'
+
+# === Define Default Files ===
+# These paths are now relative to your REPO_ROOT
+settings_file = CODE_DIR / 'code' / 'config_breast.cfg'
+train_data_file = DATA_DIR / 'desmedt_500genes_1sample_178T.csv'
+test_data_file = DATA_DIR / 'desmedt_500genes_1TESTsample_8middleT.csv'
+prior_matrix_file = DATA_DIR / 'edge_prior_matrix_desmedt_500.csv' 
+default_pretrained_model = REPO_ROOT / 'ode_net' / 'code' / 'output' / '_pretrained_best_model' / 'best_val_model.pt'
+
+# === Argument Parsing ===
+# This section now uses the relative path variables defined above
+parser = argparse.ArgumentParser('Testing')
+parser.add_argument('--settings', type=str, default=settings_file,
+                    help="Path to the settings .cfg file")
+parser.add_argument('--data', type=str, default=train_data_file,
+                    help="Path to the training data .csv file")
+parser.add_argument('--test_data', type=str, default=test_data_file,
+                    help="Path to the test data .csv file")
+parser.add_argument('--prior_matrix', type=str, default=prior_matrix_file,
+                    help="Path to the prior matrix .csv file")
+
+args = parser.parse_args()
 
 def soft_sign_mod(this_x):
     shift = 0.5
@@ -137,14 +183,15 @@ def validation(odenet, data_handler, method, explicit_time):
     return [loss, n_val]
 
 def true_loss(odenet, data_handler, method):
-    return [0,0]
+    # return [0,0]
     data, t, target = data_handler.get_true_mu_set() #tru_mu_prop = 1 (incorporate later)
-    init_bias_y = data_handler.init_bias_y
+    # init_bias_y = data_handler.init_bias_y
     #odenet.eval()
     with torch.no_grad():
         predictions = torch.zeros(data.shape).to(data_handler.device)
         for index, (time, batch_point) in enumerate(zip(t, data)):
-            predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] + init_bias_y #IH comment
+            #deleted init_y
+            predictions[index, :, :] = odeint(odenet, batch_point, time, method=method)[1] 
         
         # Calculate true mean loss
         loss =  [torch.mean(torch.abs((predictions - target)/target)),torch.mean((predictions - target) ** 2)] #regulated_loss(predictions, target, t)
@@ -197,24 +244,17 @@ def _build_save_file_name(save_path, epochs):
 def save_model(odenet, folder, filename):
     odenet.save('{}{}.pt'.format(folder, filename))
 
-parser = argparse.ArgumentParser('Testing')
-parser.add_argument('--settings', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/ode_net/code/config_breast.cfg')
-clean_name =  "desmedt_500genes_1sample_178T" 
-parser.add_argument('--data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(clean_name))
-test_data_name = "desmedt_500genes_1TESTsample_8middleT" 
-parser.add_argument('--test_data', type=str, default='/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/{}.csv'.format(test_data_name))
 
-args = parser.parse_args()
 
 # Main function
 if __name__ == "__main__":
     print('Setting recursion limit to 3000')
     sys.setrecursionlimit(3000)
     print('Loading settings from file {}'.format(args.settings))
-    # print ("argssettgs" + args.settings)
-    # print type(args.settings)
+    print(f"argssettgs{args.settings}")
+    print (type(args.settings))
     settings = read_arguments_from_file(args.settings)
-    cleaned_file_name = clean_name
+    cleaned_file_name = Path(args.data).stem
     save_file_name = _build_save_file_name(cleaned_file_name, settings['epochs'])
 
     if settings['debug']:
@@ -264,8 +304,8 @@ if __name__ == "__main__":
     abs_prior = True
     
     #Read in the prior matrix
-    prior_mat_loc = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/breast_cancer_data/clean_data/edge_prior_matrix_desmedt_500.csv'
-    prior_mat = read_prior_matrix(prior_mat_loc, sparse = False, num_genes = data_handler.dim)
+    print(f"Loading prior matrix from: {args.prior_matrix}")
+    prior_mat = read_prior_matrix(args.prior_matrix, sparse = False, num_genes = data_handler.dim)
     
     if abs_prior:
         prior_mat = torch.abs(prior_mat)
@@ -297,9 +337,9 @@ if __name__ == "__main__":
     print("Using a NN with {} neurons per layer, with {} trainable parameters, i.e. parametrization ratio = {}".format(settings['neurons_per_layer'], param_count, param_ratio))
     
     if settings['pretrained_model']:
-        pretrained_model_file = '/Users/benhorvath/Desktop/cispa/phoenix/phoenix-beho/ode_net/code/output/_pretrained_best_model/best_val_model.pt'
-        odenet.load(pretrained_model_file)
-        #print("Loaded in pre-trained model!")
+        print(f"Loading in pre-trained model from: {args.pretrained}")
+        odenet.load(args.pretrained)
+        print("Loaded in pre-trained model!")
         
     with open('{}/network.txt'.format(output_root_dir), 'w') as net_file:
         net_file.write(odenet.__str__())
@@ -465,10 +505,11 @@ if __name__ == "__main__":
         if settings['verbose']:
             pbar.close()
 
-        if settings['solve_A']:
-            A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
-            A_list.append(A)
-            print('A =\n{}'.format(A))
+        #initial comment out to run MVP
+        # if settings['solve_A']:
+        #     A = solve_eq(odenet, settings['solve_eq_gridsize'], (-5, 5, 0, 10, -3, 3, -10, 10))
+        #     A_list.append(A)
+        #     print('A =\n{}'.format(A))
 
         #handle true-mu loss
        
@@ -556,8 +597,9 @@ if __name__ == "__main__":
             print("Saving MSE plot...")
             plot_MSE(epoch, training_loss, validation_loss, true_mean_losses, true_mean_losses_init_val_based, prior_losses, img_save_dir)    
             
-            if settings['lr_range_test']:
-                plot_LR_range_test(all_lrs_used, training_loss, img_save_dir)
+            #initial comment out to run MVP
+            # if settings['lr_range_test']:
+            #     plot_LR_range_test(all_lrs_used, training_loss, img_save_dir)
 
             print("Saving losses..")
             if data_handler.n_val > 0:
