@@ -103,3 +103,13 @@ $RECYCLE.BIN/
 *.tmp
 *.bak
 *.swp
+
+# === new additions ===
+
+*.pt
+*.pyc
+*__pycache__*
+*.csv
+*.pyi
+*.txt*
+*.png
