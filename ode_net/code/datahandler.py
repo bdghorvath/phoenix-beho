@@ -107,9 +107,11 @@ class DataHandler:
         t = []
         target = []
         for i in batch_indx:
-            batch.append(self.data_pt[i[0]][i[1]])
-            target.append(self.data_pt[i[0]][i[1] + 1])
-            t.append(torch.stack([self.time_pt[i[0]][i[1] + ii] for ii in range(2)]))
+            batch.append(self.data_pt[i[0]][i[1]]) #X_t (input)
+            target.append(self.data_pt[i[0]][i[1] + 1]) #X_{t+1} (Target)
+            t.append(torch.stack([self.time_pt[i[0]][i[1] + ii] for ii in range(2)])) # [t, t+1]
+
+            
         for i in indx:
             self.train_set.pop(i)
         # Convert the lists to tensors
@@ -200,6 +202,7 @@ class DataHandler:
         self.train_set_original = np.setdiff1d(traj_indx, self.val_set_indx)
         self.train_data_length = len(self.train_set_original)
 
+    #did torch split not exist in 2021? manual is also ok ig, but would be simpler
     def _split_data_time(self, val_split):
         ''' Split the data into a training set and validation set '''
         self.n_val = int((self.datasize - self.ntraj) * val_split)

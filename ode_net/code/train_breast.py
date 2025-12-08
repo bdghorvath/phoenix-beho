@@ -19,14 +19,18 @@ try:
 except ImportError:
     from torchdiffeq import odeint_adjoint as odeint
 
-#from datagenerator import DataGenerator
+
+#other file imports
 from datahandler import DataHandler
 from odenet import ODENet
 from read_config import read_arguments_from_file
-# from solve_eq import solve_eq
-from visualization import * # <-- Kept your import
+from visualization import * 
 
+#not used imports - don't know where this comes from, no documentation
+# from solve_eq import solve_eq
+#from datagenerator import DataGenerator
 #torch.set_num_threads(16) #CHANGE THIS!
+
 
 # === Added from template ===
 def save_model(odenet, folder, filename):
@@ -70,6 +74,12 @@ parser.add_argument('--test_data', type=str, default=test_data_file,
                     help="Path to the test data .csv file")
 parser.add_argument('--prior_matrix', type=str, default=prior_matrix_file,
                     help="Path to the prior matrix .csv file")
+
+#to override the learning rate
+parser.add_argument('--lr', type=float, default=None, 
+                    help="Override learning rate from config file")
+parser.add_argument('--forced_out_dir', type=str, default=None, 
+                    help="Force a specific output directory path")
 
 args = parser.parse_args()
 
@@ -253,14 +263,39 @@ if __name__ == "__main__":
     print('Loading settings from file {}'.format(args.settings))
     print(f"argssettgs{args.settings}")
     print (type(args.settings))
+    
+    #fixed this with gemini
     settings = read_arguments_from_file(args.settings)
-    cleaned_file_name = Path(args.data).stem
-    save_file_name = _build_save_file_name(cleaned_file_name, settings['epochs'])
+    
+    # 1. Safe Debug Check (Fixes the "False" string bug)
+    is_debug = str(settings.get('debug', 'False')).lower() == 'true'
 
-    if settings['debug']:
-        print("********************IN DEBUG MODE!********************")
-        save_file_name= '(DEBUG)' + save_file_name
-    output_root_dir = '{}/{}/'.format(settings['output_dir'], save_file_name)
+    # 2. Override Learning Rate
+    if args.lr is not None:
+        print(f"--- Overriding Learning Rate: {settings.get('init_lr', 'N/A')} -> {args.lr} ---")
+        settings['init_lr'] = args.lr
+
+    # 3. Logic for Output Directory
+    cleaned_file_name = Path(args.data).stem
+
+    if args.forced_out_dir:
+        # CASE A: Running from Wrapper Script (uses forced path)
+        output_root_dir = args.forced_out_dir
+        if not output_root_dir.endswith('/'):
+            output_root_dir += '/'
+        print(f"--- Using forced output directory: {output_root_dir} ---")
+    else:
+        # CASE B: Running Manually (uses standard timestamp naming)
+        save_file_name = _build_save_file_name(cleaned_file_name, settings['epochs'])
+        
+        if is_debug:
+            print("********************IN DEBUG MODE!********************")
+            save_file_name = '(DEBUG)' + save_file_name
+            
+        output_root_dir = '{}/{}/'.format(settings['output_dir'], save_file_name)
+
+    # (DO NOT PUT ANYTHING ELSE HERE RECALCULATING output_root_dir)
+    #end section fixing with gemini
 
     img_save_dir = '{}img/'.format(output_root_dir)
     interm_models_save_dir = '{}interm_models/'.format(output_root_dir)
@@ -433,7 +468,7 @@ if __name__ == "__main__":
     rep_epochs_time_so_far = []
     rep_epochs_so_far = []
     consec_epochs_failed = 0
-    epochs_to_fail_to_terminate = 40#15
+    epochs_to_fail_to_terminate = 100#15
     all_lrs_used = []
 
     #print(get_true_val_set_r2(odenet, data_handler, settings['method'], settings['batch_type']))

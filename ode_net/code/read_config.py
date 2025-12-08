@@ -1,15 +1,48 @@
-# Move this into train
 import configparser
+import os
 
+#this function was modified to be better for probing purposes
+def read_arguments_from_file(file_path):
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Config file not found: {file_path}")
+ 
+    # 1. Initialize parser to ignore inline comments (strips #...)
+    config = configparser.ConfigParser(inline_comment_prefixes='#')
+    config.read(file_path)
 
-def read_arguments_from_file(fp):
-    """Reads run arguments from file"""
-    config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
-    config.read(fp)
+    # 2. Get the settings dictionary
+    if 'settings' in config:
+        out_dict = dict(config['settings'])
+    else:
+        # Fallback for missing header
+        with open(file_path, 'r') as f:
+            file_content = '[settings]\n' + f.read()
+        config_string = configparser.ConfigParser(inline_comment_prefixes='#')
+        config_string.read_string(file_content)
+        out_dict = dict(config_string['settings'])
 
-    settings = config['settings']
+    # 3. SMART CONVERSION: Automatically convert types
+    for key, value in out_dict.items():
+        # Clean whitespace
+        value = value.strip()
+        
+        # Check for Boolean
+        if value.lower() == 'true':
+            out_dict[key] = True
+        elif value.lower() == 'false':
+            out_dict[key] = False
+        else:
+            # Check for Number (Float or Int)
+            try:
+                if '.' in value or 'e' in value.lower():
+                    out_dict[key] = float(value)
+                else:
+                    out_dict[key] = int(value)
+            except ValueError:
+                # Keep as string if it's not a number (e.g., "adam", "linear")
+                out_dict[key] = value
 
-    return _convert_arguments(settings)
+    return out_dict
 
 def _convert_arguments(settings):
     converted_settings = {}
